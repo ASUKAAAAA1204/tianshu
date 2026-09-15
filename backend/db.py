@@ -75,10 +75,14 @@ def connect(path: Path = DEFAULT_DB) -> sqlite3.Connection:
 def init_db(path: Path = DEFAULT_DB, reset: bool = False) -> None:
     if reset and path.exists():
         path.unlink()
-    with connect(path) as db:
+    db = connect(path)
+    try:
         db.executescript(SCHEMA)
         if db.execute("SELECT COUNT(*) FROM vehicles").fetchone()[0] == 0:
             seed(db)
+        db.commit()
+    finally:
+        db.close()
 
 
 def seed(db: sqlite3.Connection) -> None:
