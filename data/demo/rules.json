@@ -1,0 +1,6 @@
+[
+  {"code":"R-001","name":"硬限制区禁止穿越","level":"hard","level_label":"硬约束"},
+  {"code":"R-002","name":"任务高度上限 1200m","level":"hard","level_label":"硬约束"},
+  {"code":"R-003","name":"临时限制区需人工确认","level":"soft","level_label":"软约束"},
+  {"code":"R-004","name":"航线冲突提前 120 秒预警","level":"alert","level_label":"预警"}
+]

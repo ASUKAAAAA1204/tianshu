@@ -1,0 +1,6 @@
+__pycache__/
+*.py[cod]
+data/platform.db
+.pytest_cache/
+.DS_Store
+Thumbs.db

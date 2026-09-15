@@ -1,0 +1,51 @@
+import json
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
+from db import connect, init_db  # noqa: E402
+from server import ApiError, validate_mission  # noqa: E402
+
+
+class DatabaseTests(unittest.TestCase):
+    def test_init_seeds_core_tables(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "test.db"
+            init_db(path)
+            db = connect(path)
+            try:
+                self.assertEqual(db.execute("SELECT COUNT(*) FROM layers").fetchone()[0], 4)
+                self.assertEqual(db.execute("SELECT COUNT(*) FROM vehicles").fetchone()[0], 3)
+                self.assertEqual(db.execute("SELECT COUNT(*) FROM missions").fetchone()[0], 3)
+                geometry = json.loads(db.execute("SELECT geometry_json FROM layers LIMIT 1").fetchone()[0])
+                self.assertTrue(geometry["coordinates"])
+            finally:
+                db.close()
+
+
+class ValidationTests(unittest.TestCase):
+    def valid(self):
+        return {"id":"MS-TEST-001","name":"测试任务","vehicle_id":"UAV-LP-001","route_name":"R-TEST","start_lng":107.74,"start_lat":30.64,"end_lng":107.78,"end_lat":30.66,"planned_altitude":120}
+
+    def test_valid_mission(self):
+        self.assertEqual(validate_mission(self.valid())["planned_altitude"], 120.0)
+
+    def test_rejects_excessive_altitude(self):
+        payload = self.valid()
+        payload["planned_altitude"] = 1300
+        with self.assertRaises(ApiError) as context:
+            validate_mission(payload)
+        self.assertEqual(context.exception.code, "INVALID_ALTITUDE")
+
+    def test_rejects_outside_demo_area(self):
+        payload = self.valid()
+        payload["start_lng"] = 120
+        with self.assertRaises(ApiError) as context:
+            validate_mission(payload)
+        self.assertEqual(context.exception.code, "OUT_OF_DEMO_AREA")
+
+
+if __name__ == "__main__":
+    unittest.main()

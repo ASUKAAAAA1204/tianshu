@@ -1,0 +1,6 @@
+{"type":"FeatureCollection","features":[
+  {"type":"Feature","properties":{"name":"梁平机场净空保护区","type":"restricted","level":"hard"},"geometry":{"type":"Polygon","coordinates":[[[107.775,30.668],[107.805,30.668],[107.805,30.692],[107.775,30.692],[107.775,30.668]]]}},
+  {"type":"Feature","properties":{"name":"城区低空运行区","type":"operable","level":"soft"},"geometry":{"type":"Polygon","coordinates":[[[107.740,30.630],[107.785,30.630],[107.785,30.660],[107.740,30.660],[107.740,30.630]]]}},
+  {"type":"Feature","properties":{"name":"临时限制区 A-01","type":"restricted","level":"temporary"},"geometry":{"type":"Polygon","coordinates":[[[107.815,30.635],[107.837,30.635],[107.837,30.653],[107.815,30.653],[107.815,30.635]]]}},
+  {"type":"Feature","properties":{"name":"北部测试空域","type":"operable","level":"open"},"geometry":{"type":"Polygon","coordinates":[[[107.720,30.700],[107.760,30.700],[107.760,30.730],[107.720,30.730],[107.720,30.700]]]}}
+]}

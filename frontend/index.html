@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>梁平数字空域 · 运行基础底座</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <div class="eyebrow">LIANGPING LOW-ALTITUDE OPERATIONS</div>
+        <h1>梁平县域数字空域与低空运行智能服务平台</h1>
+      </div>
+      <div class="topbar-meta"><span class="status-dot"></span> 演示环境 · 离线可用</div>
+    </header>
+    <main class="shell">
+      <section class="metrics" id="metrics"></section>
+      <section class="workspace">
+        <div class="panel map-panel">
+          <div class="panel-head"><div><span class="section-kicker">01 / 空域态势</span><h2>四维空域运行视图</h2></div><span class="badge badge-green">数据正常</span></div>
+          <div class="map-canvas" id="mapCanvas" aria-label="空域示意图"></div>
+          <div class="legend"><span><i class="legend-box blue"></i>可运行空域</span><span><i class="legend-box amber"></i>限制区</span><span><i class="legend-box red"></i>冲突预警</span></div>
+        </div>
+        <div class="panel mission-panel">
+          <div class="panel-head"><div><span class="section-kicker">02 / 运行任务</span><h2>任务与航线</h2></div><button class="primary" id="newMission">新建任务</button></div>
+          <div id="missionList" class="mission-list"></div>
+        </div>
+      </section>
+      <section class="lower-grid">
+        <div class="panel"><div class="panel-head"><div><span class="section-kicker">03 / 规则引擎</span><h2>当前生效规则</h2></div><span class="badge">规则优先</span></div><div id="ruleList" class="rule-list"></div></div>
+        <div class="panel"><div class="panel-head"><div><span class="section-kicker">04 / 设施与飞行器</span><h2>资源状态</h2></div><span class="badge badge-blue">实时模拟</span></div><div id="vehicleList" class="vehicle-list"></div></div>
+      </section>
+      <footer class="footer"><span id="health">正在检查服务...</span><span>版本 0.2.0 · Sprint 1</span></footer>
+    </main>
+    <dialog id="missionDialog"><form id="missionForm"><div class="dialog-head"><h2>新建运行任务</h2><button type="button" id="closeDialog">×</button></div><div class="form-grid"><label>任务编号<input name="id" value="MS-20260915-004" required></label><label>任务名称<input name="name" value="新建基础运行任务" required></label><label>飞行器<select name="vehicle_id" id="vehicleSelect"></select></label><label>航线名称<input name="route_name" value="R-新建-01" required></label><label>起点经度<input name="start_lng" value="107.742" required></label><label>起点纬度<input name="start_lat" value="30.642" required></label><label>终点经度<input name="end_lng" value="107.792" required></label><label>终点纬度<input name="end_lat" value="30.659" required></label><label>计划高度（米）<input name="planned_altitude" type="number" min="20" max="1200" value="120" required></label></div><div id="formMessage" class="form-message"></div><div class="dialog-actions"><button type="button" id="cancelDialog">取消</button><button class="primary" type="submit">创建并保存</button></div></form></dialog>
+    <script src="/app.js" defer></script>
+  </body>
+</html>

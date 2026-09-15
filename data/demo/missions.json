@@ -1,0 +1,5 @@
+[
+  {"id":"MS-20260915-001","name":"城区基础巡查航线","vehicle_id":"UAV-LP-001","route_name":"R-城区-01","start_lng":107.745,"start_lat":30.638,"end_lng":107.780,"end_lat":30.657,"planned_altitude":120,"status":"running","status_label":"运行中"},
+  {"id":"MS-20260915-002","name":"北部空域测绘演示","vehicle_id":"UAV-LP-002","route_name":"R-北部-03","start_lng":107.725,"start_lat":30.704,"end_lng":107.755,"end_lat":30.725,"planned_altitude":220,"status":"warning","status_label":"需处置"},
+  {"id":"MS-20260915-003","name":"平台联调测试任务","vehicle_id":"UAV-LP-003","route_name":"R-测试-01","start_lng":107.820,"start_lat":30.615,"end_lng":107.805,"end_lat":30.650,"planned_altitude":100,"status":"planned","status_label":"已计划"}
+]

@@ -1,0 +1,5 @@
+[
+  {"id":"UAV-LP-001","name":"巡检一号","model":"多旋翼 M300","longitude":107.758,"latitude":30.646,"altitude":120,"battery":86,"status":"online"},
+  {"id":"UAV-LP-002","name":"测绘二号","model":"垂直起降 V2","longitude":107.739,"latitude":30.713,"altitude":220,"battery":64,"status":"online"},
+  {"id":"UAV-LP-003","name":"平台演示机","model":"多旋翼 S20","longitude":107.825,"latitude":30.620,"altitude":0,"battery":97,"status":"standby"}
+]
