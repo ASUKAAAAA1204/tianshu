@@ -1,6 +1,7 @@
 __pycache__/
 *.py[cod]
 data/platform.db
+data/platform.db-journal
 .pytest_cache/
 .DS_Store
 Thumbs.db
