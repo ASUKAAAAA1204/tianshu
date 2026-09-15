@@ -6,7 +6,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
 from db import connect, init_db  # noqa: E402
-from server import ApiError, validate_mission  # noqa: E402
+from server import ApiError, validate_mission, Handler  # noqa: E402
 
 
 class DatabaseTests(unittest.TestCase):
@@ -45,6 +45,11 @@ class ValidationTests(unittest.TestCase):
         with self.assertRaises(ApiError) as context:
             validate_mission(payload)
         self.assertEqual(context.exception.code, "OUT_OF_DEMO_AREA")
+
+    def test_haversine_and_geometry_helpers_exist(self):
+        from server import haversine, segment_intersects_box
+        self.assertGreater(haversine(107.74, 30.64, 107.78, 30.66), 1000)
+        self.assertTrue(segment_intersects_box((107.70, 30.60), (107.90, 30.80), (107.75, 30.65, 107.80, 30.70)))
 
 
 if __name__ == "__main__":

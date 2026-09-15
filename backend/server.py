@@ -71,7 +71,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             with connect() as db:
                 resources = {
-                    "/api/layers": "SELECT * FROM layers WHERE status='published' ORDER BY id",
+                    "/api/layers": "SELECT * FROM layers ORDER BY id",
                     "/api/vehicles": "SELECT * FROM vehicles ORDER BY id",
                     "/api/missions": "SELECT * FROM missions ORDER BY created_at DESC, id DESC",
                     "/api/rules": "SELECT * FROM rules WHERE enabled=1 ORDER BY code",
@@ -106,6 +106,13 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):  # noqa: N802
         try:
             route = urlparse(self.path).path
+            if route == "/api/layers/import":
+                self._import_layer(self._body())
+                return
+            publish_match = re.fullmatch(r"/api/layers/(\d+)/(publish|disable)", route)
+            if publish_match:
+                self._set_layer_status(int(publish_match.group(1)), publish_match.group(2))
+                return
             if route != "/api/missions":
                 check_match = re.fullmatch(r"/api/missions/([^/]+)/check", route)
                 plan_match = re.fullmatch(r"/api/missions/([^/]+)/routes/plan", route)
@@ -137,6 +144,36 @@ class Handler(BaseHTTPRequestHandler):
             self._error(error)
         except Exception as error:
             self._error(ApiError(500, "INTERNAL_ERROR", f"服务处理失败: {error}"))
+
+    def _import_layer(self, payload):
+        if payload.get("type") != "FeatureCollection" or not isinstance(payload.get("features"), list) or not payload["features"]:
+            raise ApiError(422, "INVALID_GEOJSON", "必须提供非空 FeatureCollection")
+        name = payload.get("name") or "导入图层"
+        layer_type = payload.get("layer_type", "restricted")
+        level = payload.get("level", "hard")
+        if layer_type not in ("restricted", "operable") or level not in ("hard", "soft", "temporary", "open"):
+            raise ApiError(422, "INVALID_LAYER_ATTRIBUTES", "图层类型或限制等级不合法")
+        for feature in payload["features"]:
+            geometry = feature.get("geometry", {})
+            coords = geometry.get("coordinates")
+            if geometry.get("type") != "Polygon" or not coords or not coords[0] or len(coords[0]) < 4:
+                raise ApiError(422, "INVALID_GEOMETRY", "当前仅支持闭合 Polygon，且至少需要4个坐标点")
+            for point in coords[0]:
+                if not isinstance(point, list) or len(point) < 2 or not 105 <= float(point[0]) <= 110 or not 28 <= float(point[1]) <= 32:
+                    raise ApiError(422, "INVALID_COORDINATE", "坐标必须位于梁平演示区域范围")
+        with connect() as db:
+            cur = db.execute("INSERT INTO layers(name,layer_type,level,geometry_json,status,source) VALUES(?,?,?,?,?,?)", (name, layer_type, level, json.dumps(payload["features"][0]["geometry"], ensure_ascii=False), "draft", "import"))
+            db.execute("INSERT INTO audit_logs(action,object_type,object_id,detail_json) VALUES(?,?,?,?)", ("import", "layer", str(cur.lastrowid), json.dumps({"name":name}, ensure_ascii=False)))
+            self._json({"id":cur.lastrowid,"name":name,"status":"draft","message":"图层校验通过，等待发布"}, HTTPStatus.CREATED)
+
+    def _set_layer_status(self, layer_id, action):
+        status = "published" if action == "publish" else "disabled"
+        with connect() as db:
+            if not db.execute("SELECT 1 FROM layers WHERE id=?", (layer_id,)).fetchone():
+                raise ApiError(404, "LAYER_NOT_FOUND", "图层不存在")
+            db.execute("UPDATE layers SET status=? WHERE id=?", (status, layer_id))
+            db.execute("INSERT INTO audit_logs(action,object_type,object_id,detail_json) VALUES(?,?,?,?)", (action, "layer", str(layer_id), json.dumps({"status":status})))
+            self._json({"id":layer_id,"status":status})
 
     def _check_mission(self, mission_id):
         with connect() as db:
