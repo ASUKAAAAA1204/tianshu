@@ -148,6 +148,8 @@ class Handler(BaseHTTPRequestHandler):
     def _import_layer(self, payload):
         if payload.get("type") != "FeatureCollection" or not isinstance(payload.get("features"), list) or not payload["features"]:
             raise ApiError(422, "INVALID_GEOJSON", "必须提供非空 FeatureCollection")
+        if len(payload["features"]) != 1:
+            raise ApiError(422, "MULTI_FEATURE_UNSUPPORTED", "当前版本一次只允许导入一个 Polygon 图层")
         name = payload.get("name") or "导入图层"
         layer_type = payload.get("layer_type", "restricted")
         level = payload.get("level", "hard")
@@ -159,7 +161,11 @@ class Handler(BaseHTTPRequestHandler):
             if geometry.get("type") != "Polygon" or not coords or not coords[0] or len(coords[0]) < 4:
                 raise ApiError(422, "INVALID_GEOMETRY", "当前仅支持闭合 Polygon，且至少需要4个坐标点")
             for point in coords[0]:
-                if not isinstance(point, list) or len(point) < 2 or not 105 <= float(point[0]) <= 110 or not 28 <= float(point[1]) <= 32:
+                try:
+                    valid_point = isinstance(point, list) and len(point) >= 2 and 105 <= float(point[0]) <= 110 and 28 <= float(point[1]) <= 32
+                except (TypeError, ValueError):
+                    valid_point = False
+                if not valid_point:
                     raise ApiError(422, "INVALID_COORDINATE", "坐标必须位于梁平演示区域范围")
         with connect() as db:
             cur = db.execute("INSERT INTO layers(name,layer_type,level,geometry_json,status,source) VALUES(?,?,?,?,?,?)", (name, layer_type, level, json.dumps(payload["features"][0]["geometry"], ensure_ascii=False), "draft", "import"))
