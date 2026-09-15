@@ -61,6 +61,24 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     detail_json TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+CREATE TABLE IF NOT EXISTS mission_checks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    mission_id TEXT NOT NULL REFERENCES missions(id),
+    decision TEXT NOT NULL,
+    risk_level TEXT NOT NULL,
+    items_json TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS routes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    mission_id TEXT NOT NULL REFERENCES missions(id),
+    name TEXT NOT NULL,
+    points_json TEXT NOT NULL,
+    distance_m REAL NOT NULL,
+    duration_s REAL NOT NULL,
+    risk_level TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 """
 
 

@@ -5,6 +5,7 @@ import mimetypes
 import os
 import re
 import sqlite3
+import math
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -82,6 +83,20 @@ class Handler(BaseHTTPRequestHandler):
                 if route in resources:
                     self._json(rows(db, resources[route]))
                     return
+                mission_match = re.fullmatch(r"/api/missions/([^/]+)", route)
+                if mission_match:
+                    mission = db.execute("SELECT * FROM missions WHERE id=?", (mission_match.group(1),)).fetchone()
+                    if not mission:
+                        raise ApiError(404, "MISSION_NOT_FOUND", "任务不存在")
+                    result = dict(mission)
+                    result["checks"] = rows(db, "SELECT * FROM mission_checks WHERE mission_id=? ORDER BY id DESC", (result["id"],))
+                    result["routes"] = rows(db, "SELECT * FROM routes WHERE mission_id=? ORDER BY id DESC", (result["id"],))
+                    self._json(result)
+                    return
+                route_match = re.fullmatch(r"/api/missions/([^/]+)/routes", route)
+                if route_match:
+                    self._json(rows(db, "SELECT * FROM routes WHERE mission_id=? ORDER BY id DESC", (route_match.group(1),)))
+                    return
             self._file(FRONTEND / ("index.html" if route in ("/", "/index.html") else route.lstrip("/")))
         except ApiError as error:
             self._error(error)
@@ -92,6 +107,14 @@ class Handler(BaseHTTPRequestHandler):
         try:
             route = urlparse(self.path).path
             if route != "/api/missions":
+                check_match = re.fullmatch(r"/api/missions/([^/]+)/check", route)
+                plan_match = re.fullmatch(r"/api/missions/([^/]+)/routes/plan", route)
+                if check_match:
+                    self._check_mission(check_match.group(1))
+                    return
+                if plan_match:
+                    self._plan_route(plan_match.group(1))
+                    return
                 raise ApiError(404, "NOT_FOUND", "接口不存在")
             payload = validate_mission(self._body())
             with connect() as db:
@@ -115,6 +138,45 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as error:
             self._error(ApiError(500, "INTERNAL_ERROR", f"服务处理失败: {error}"))
 
+    def _check_mission(self, mission_id):
+        with connect() as db:
+            mission = db.execute("SELECT * FROM missions WHERE id=?", (mission_id,)).fetchone()
+            if not mission:
+                raise ApiError(404, "MISSION_NOT_FOUND", "任务不存在")
+            items = []
+            if mission["planned_altitude"] > 1200:
+                items.append({"rule_code":"R-002","level":"hard","message":"计划高度超过1200米","action":"调整飞行高度"})
+            start, end = (mission["start_lng"], mission["start_lat"]), (mission["end_lng"], mission["end_lat"])
+            for layer in db.execute("SELECT * FROM layers WHERE status='published'").fetchall():
+                geometry = json.loads(layer["geometry_json"])
+                ring = geometry.get("coordinates", [[]])[0]
+                if not ring: continue
+                lngs, lats = [p[0] for p in ring], [p[1] for p in ring]
+                if segment_intersects_box(start, end, (min(lngs), min(lats), max(lngs), max(lats))):
+                    level = "hard" if layer["level"] == "hard" else "soft"
+                    items.append({"rule_code":"R-001" if level == "hard" else "R-003","level":level,"message":f"航线穿越{layer['name']}","action":"调整航线" if level == "hard" else "人工确认后继续"})
+            decision = "blocked" if any(x["level"] == "hard" for x in items) else ("warning" if items else "pass")
+            risk = "high" if decision == "blocked" else ("medium" if items else "low")
+            db.execute("INSERT INTO mission_checks(mission_id,decision,risk_level,items_json) VALUES(?,?,?,?)", (mission_id, decision, risk, json.dumps(items, ensure_ascii=False)))
+            db.execute("INSERT INTO audit_logs(action,object_type,object_id,detail_json) VALUES(?,?,?,?)", ("check", "mission", mission_id, json.dumps({"decision":decision,"risk_level":risk}, ensure_ascii=False)))
+            self._json({"mission_id":mission_id,"decision":decision,"risk_level":risk,"items":items})
+
+    def _plan_route(self, mission_id):
+        with connect() as db:
+            mission = db.execute("SELECT * FROM missions WHERE id=?", (mission_id,)).fetchone()
+            if not mission: raise ApiError(404, "MISSION_NOT_FOUND", "任务不存在")
+            latest = db.execute("SELECT * FROM mission_checks WHERE mission_id=? ORDER BY id DESC LIMIT 1", (mission_id,)).fetchone()
+            if not latest:
+                raise ApiError(409, "CHECK_REQUIRED", "请先执行规则检查")
+            if latest["decision"] == "blocked":
+                raise ApiError(409, "ROUTE_BLOCKED", "规则检查未通过，不能生成航线")
+            points = [[mission["start_lng"], mission["start_lat"], mission["planned_altitude"]], [mission["end_lng"], mission["end_lat"], mission["planned_altitude"]]]
+            distance = haversine(points[0][0], points[0][1], points[1][0], points[1][1])
+            duration = distance / 12
+            cursor = db.execute("INSERT INTO routes(mission_id,name,points_json,distance_m,duration_s,risk_level) VALUES(?,?,?,?,?,?)", (mission_id, "主航线-直连", json.dumps(points), distance, duration, "medium" if latest["decision"] == "warning" else "low"))
+            db.execute("INSERT INTO audit_logs(action,object_type,object_id,detail_json) VALUES(?,?,?,?)", ("plan", "route", str(cursor.lastrowid), json.dumps({"mission_id":mission_id}, ensure_ascii=False)))
+            self._json({"id":cursor.lastrowid,"mission_id":mission_id,"name":"主航线-直连","points":points,"distance_m":round(distance,1),"duration_s":round(duration,1),"risk_level":"medium" if latest["decision"] == "warning" else "low"}, HTTPStatus.CREATED)
+
 
 def validate_mission(payload):
     required = ["id", "name", "vehicle_id", "route_name", "start_lng", "start_lat", "end_lng", "end_lat", "planned_altitude"]
@@ -134,6 +196,28 @@ def validate_mission(payload):
     if not 20 <= payload["planned_altitude"] <= 1200:
         raise ApiError(422, "INVALID_ALTITUDE", "计划高度必须在20至1200米之间")
     return {key: payload[key] for key in required}
+
+def segment_intersects_box(a, b, box):
+    minx,miny,maxx,maxy=box
+    if minx <= a[0] <= maxx and miny <= a[1] <= maxy: return True
+    if minx <= b[0] <= maxx and miny <= b[1] <= maxy: return True
+    dx,dy=b[0]-a[0],b[1]-a[1]
+    for x in (minx,maxx):
+        if dx and 0 <= (x-a[0])/dx <= 1:
+            y=a[1]+(x-a[0])*dy/dx
+            if miny <= y <= maxy: return True
+    for y in (miny,maxy):
+        if dy and 0 <= (y-a[1])/dy <= 1:
+            x=a[0]+(y-a[1])*dx/dy
+            if minx <= x <= maxx: return True
+    return False
+
+def haversine(lon1,lat1,lon2,lat2):
+    radius=6371000
+    p1,p2=math.radians(lat1),math.radians(lat2)
+    dp=math.radians(lat2-lat1); dl=math.radians(lon2-lon1)
+    h=math.sin(dp/2)**2+math.cos(p1)*math.cos(p2)*math.sin(dl/2)**2
+    return 2*radius*math.asin(math.sqrt(h))
 
 
 def main():
