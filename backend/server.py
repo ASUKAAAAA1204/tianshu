@@ -69,6 +69,10 @@ class Handler(BaseHTTPRequestHandler):
             if route == "/api/health":
                 self._json({"status": "ok", "service": "liangping-low-altitude-base", "version": "0.2.0"})
                 return
+            if route == "/api/demo/status":
+                with connect() as db:
+                    self._json({"layers": db.execute("SELECT COUNT(*) FROM layers").fetchone()[0], "missions": db.execute("SELECT COUNT(*) FROM missions").fetchone()[0], "audit_logs": db.execute("SELECT COUNT(*) FROM audit_logs").fetchone()[0]})
+                return
             with connect() as db:
                 resources = {
                     "/api/layers": "SELECT * FROM layers ORDER BY id",
@@ -106,6 +110,10 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):  # noqa: N802
         try:
             route = urlparse(self.path).path
+            if route == "/api/demo/reset":
+                init_db(reset=True)
+                self._json({"status":"reset","message":"演示数据已重置"})
+                return
             if route == "/api/layers/import":
                 self._import_layer(self._body())
                 return
