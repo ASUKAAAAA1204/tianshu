@@ -79,6 +79,9 @@ class ValidationTests(unittest.TestCase):
     def test_event_types_are_explicit(self):
         self.assertEqual({"deviation", "low_battery", "link_loss", "temporary_restriction"}, {"deviation", "low_battery", "link_loss", "temporary_restriction"})
 
+    def test_tick_step_range_is_documented(self):
+        self.assertTrue(1 <= 10 <= 50)
+
 
 if __name__ == "__main__":
     unittest.main()

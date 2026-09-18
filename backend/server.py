@@ -106,6 +106,11 @@ class Handler(BaseHTTPRequestHandler):
                 if event_match:
                     self._json(rows(db, "SELECT * FROM events WHERE mission_id=? ORDER BY id DESC", (event_match.group(1),)))
                     return
+                flight_match = re.fullmatch(r"/api/missions/([^/]+)/flight", route)
+                if flight_match:
+                    flight = db.execute("SELECT * FROM flight_sessions WHERE mission_id=? ORDER BY id DESC LIMIT 1", (flight_match.group(1),)).fetchone()
+                    if not flight: raise ApiError(404, "FLIGHT_NOT_FOUND", "尚未启动模拟飞行")
+                    result = dict(flight); result["telemetry"] = json.loads(result.pop("telemetry_json")); self._json(result); return
             self._file(FRONTEND / ("index.html" if route in ("/", "/index.html") else route.lstrip("/")))
         except ApiError as error:
             self._error(error)
@@ -125,12 +130,15 @@ class Handler(BaseHTTPRequestHandler):
             start_match = re.fullmatch(r"/api/missions/([^/]+)/flight/start", route)
             event_match = re.fullmatch(r"/api/missions/([^/]+)/events", route)
             resolve_match = re.fullmatch(r"/api/events/(\d+)/resolve", route)
+            tick_match = re.fullmatch(r"/api/missions/([^/]+)/flight/tick", route)
             if start_match:
                 self._start_flight(start_match.group(1)); return
             if event_match:
                 self._inject_event(event_match.group(1), self._body()); return
             if resolve_match:
                 self._resolve_event(int(resolve_match.group(1))); return
+            if tick_match:
+                self._tick_flight(tick_match.group(1), self._body()); return
             publish_match = re.fullmatch(r"/api/layers/(\d+)/(publish|disable)", route)
             if publish_match:
                 self._set_layer_status(int(publish_match.group(1)), publish_match.group(2))
@@ -266,6 +274,23 @@ class Handler(BaseHTTPRequestHandler):
             cur = db.execute("INSERT INTO events(mission_id,event_type,severity,message,payload_json) VALUES(?,?,?,?,?)", (mission_id,event_type,severity,message,json.dumps(payload,ensure_ascii=False)))
             db.execute("INSERT INTO audit_logs(action,object_type,object_id,detail_json) VALUES(?,?,?,?)", ("event", "mission", mission_id, json.dumps(payload, ensure_ascii=False)))
             self._json({"id":cur.lastrowid,"mission_id":mission_id,"event_type":event_type,"severity":severity,"message":message,"status":"open"}, HTTPStatus.CREATED)
+
+    def _tick_flight(self, mission_id, payload):
+        step = float(payload.get("step", 10))
+        if not 1 <= step <= 50: raise ApiError(422, "INVALID_STEP", "推进步长必须在1至50之间")
+        with session() as db:
+            flight = db.execute("SELECT * FROM flight_sessions WHERE mission_id=? ORDER BY id DESC LIMIT 1", (mission_id,)).fetchone()
+            mission = db.execute("SELECT * FROM missions WHERE id=?", (mission_id,)).fetchone()
+            if not flight or not mission: raise ApiError(404, "FLIGHT_NOT_FOUND", "尚未启动模拟飞行")
+            telemetry = json.loads(flight["telemetry_json"]); progress = min(100, flight["progress"] + step)
+            ratio = progress / 100
+            telemetry["longitude"] = mission["start_lng"] + (mission["end_lng"] - mission["start_lng"]) * ratio
+            telemetry["latitude"] = mission["start_lat"] + (mission["end_lat"] - mission["start_lat"]) * ratio
+            telemetry["battery"] = max(0, round(100 - progress * 0.35, 1))
+            status = "completed" if progress >= 100 else "running"
+            db.execute("UPDATE flight_sessions SET status=?,progress=?,telemetry_json=?,updated_at=CURRENT_TIMESTAMP WHERE id=?", (status, progress, json.dumps(telemetry), flight["id"]))
+            if status == "completed": db.execute("UPDATE missions SET status='completed',status_label='已完成' WHERE id=?", (mission_id,))
+            self._json({"session_id":flight["id"],"mission_id":mission_id,"status":status,"progress":progress,"telemetry":telemetry})
 
     def _resolve_event(self, event_id):
         with session() as db:

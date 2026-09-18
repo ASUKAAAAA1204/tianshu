@@ -74,7 +74,21 @@ async function startFlight(id) {
   const result = await response.json();
   if (!response.ok) return showError(result);
   $("#resultBadge").textContent = "飞行中";
-  $("#resultContent").innerHTML = `<div class="flight-status">任务 ${id} 已启动模拟飞行 · 链路在线 · 电量 ${result.telemetry.battery}%</div>`;
+  $("#resultContent").innerHTML = `<div class="flight-status">任务 ${id} 已启动模拟飞行 · 链路在线 · 电量 ${result.telemetry.battery}% <button data-tick="${id}">推进10%</button></div>`;
+  bindTick(id);
+}
+
+function bindTick(id) {
+  const button = $("[data-tick]");
+  if (!button) return;
+  button.onclick = async () => {
+    const response = await fetch(`/api/missions/${id}/flight/tick`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ step: 10 }) });
+    const result = await response.json();
+    if (!response.ok) return showError(result);
+    $("#resultBadge").textContent = `${result.status} · ${result.progress}%`;
+    $("#resultContent").innerHTML = `<div class="flight-status">进度 ${result.progress}% · 位置 ${result.telemetry.longitude.toFixed(5)}, ${result.telemetry.latitude.toFixed(5)} · 电量 ${result.telemetry.battery}% ${result.status === "completed" ? "· 任务已完成" : ""} <button data-tick="${id}">继续推进</button></div>`;
+    bindTick(id);
+  };
 }
 
 async function injectEvent(id) {
