@@ -1,8 +1,89 @@
-const $=s=>document.querySelector(s);let data;
-const metric=(l,v,u,t)=>`<div class="metric"><div class="metric-label">${l}</div><div class="metric-value ${t||''}">${v}<small>${u}</small></div></div>`;
-const project=([lng,lat])=>[((lng-107.70)/.16)*100,((30.75-lat)/.15)*100];
-function renderMap(layers,vehicles){const visible=layers.filter(x=>x.visible!==false);const zones=visible.map(x=>{const g=JSON.parse(x.geometry_json);return `<polygon points="${g.coordinates[0].map(p=>project(p).join(',')).join(' ')}" class="geo-zone ${x.layer_type}"><title>${x.name}</title></polygon>`}).join('');const aircraft=vehicles.map(v=>{const [x,y]=project([v.longitude,v.latitude]);return `<g transform="translate(${x} ${y})" class="geo-aircraft"><circle r="1.7"/><text x="2.7" y="1">${v.id}</text></g>`}).join('');$('#mapCanvas').innerHTML=`<svg class="geo-map" viewBox="0 0 100 100" preserveAspectRatio="none"><rect width="100" height="100" fill="#0f1a2a"/>${zones}<path d="M 25 72 L 57 54 L 79 67" class="geo-route"/>${aircraft}</svg><div class="map-label label-north">N · WGS84</div><div class="map-label label-south">梁平县域演示坐标范围</div>`}
-function render(d){data=d;const running=d.missions.filter(x=>x.status==='running').length,warn=d.missions.filter(x=>x.status==='warning').length;$('#metrics').innerHTML=[metric('在线飞行器',d.vehicles.length,'架'),metric('今日任务',d.missions.length,'项'),metric('运行中',running,'项','green'),metric('待处置预警',warn,'项',warn?'red':'green')].join('');d.layers.forEach(x=>x.visible=true);renderMap(d.layers,d.vehicles);$('#layerList').innerHTML=d.layers.map(x=>`<label class="layer-row"><input type="checkbox" checked data-layer="${x.id}"><span class="layer-swatch ${x.layer_type}"></span><span>${x.name}</span><small>${x.status} · v${x.version}</small></label>`).join('');document.querySelectorAll('[data-layer]').forEach(c=>c.onchange=()=>{const x=d.layers.find(i=>String(i.id)===c.dataset.layer);x.visible=c.checked;renderMap(d.layers,d.vehicles)});$('#missionList').innerHTML=d.missions.map(x=>`<article class="mission-item"><div class="mission-icon">${x.status==='running'?'▶':'○'}</div><div class="mission-main"><div class="mission-title">${x.name}</div><div class="mission-meta">${x.vehicle_id} · ${x.route_name} · ${x.planned_altitude}m</div></div><div class="mission-actions"><button data-check="${x.id}">检查</button><button data-plan="${x.id}">航线</button><span class="state state-${x.status}">${x.status_label}</span></div></article>`).join('');$('#ruleList').innerHTML=d.rules.map(x=>`<div class="rule-item"><span class="rule-code">${x.code}</span><span>${x.name}</span><span class="rule-level ${x.level}">${x.level_label}</span></div>`).join('');$('#vehicleList').innerHTML=d.vehicles.map(x=>`<div class="vehicle-item"><div><strong>${x.name}</strong><span>${x.model} · ${x.longitude.toFixed(3)}, ${x.latitude.toFixed(3)} · ${x.altitude}m</span></div><div class="vehicle-health"><span class="health-bar"><i style="width:${x.battery}%"></i></span><span>${x.battery}%</span></div></div>`).join('');$('#vehicleSelect').innerHTML=d.vehicles.map(x=>`<option value="${x.id}">${x.name}（${x.id}）</option>`).join('');document.querySelectorAll('[data-check]').forEach(b=>b.onclick=()=>runAction(b.dataset.check,'check'));document.querySelectorAll('[data-plan]').forEach(b=>b.onclick=()=>runAction(b.dataset.plan,'routes/plan'))}
-async function runAction(id,action){const r=await fetch(`/api/missions/${id}/${action}`,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}),result=await r.json();if(!r.ok){$('#resultBadge').textContent='操作失败';$('#resultContent').innerHTML=`<div class="result-block blocked"><strong>${result.code}</strong><span>${result.message}</span></div>`;return}if(action==='check'){$('#resultBadge').textContent=`${result.decision} · ${result.risk_level}`;$('#resultContent').innerHTML=`<div class="result-summary ${result.decision}">${result.decision==='pass'?'规则检查通过，可生成航线':result.decision==='warning'?'存在软约束，需人工确认':'存在硬约束，禁止生成航线'}</div>${result.items.length?result.items.map(x=>`<div class="result-block ${x.level}"><strong>${x.rule_code}</strong><span>${x.message}</span><small>${x.action}</small></div>`).join(''):'<div class="result-empty">没有发现冲突项</div>'}`}else{$('#resultBadge').textContent='航线已生成';$('#resultContent').innerHTML=`<div class="route-result"><strong>${result.name}</strong><span>距离 ${result.distance_m} 米 · 预计 ${result.duration_s} 秒</span><span>风险等级：${result.risk_level}</span></div>`}}
-fetch('/api/bootstrap').then(r=>r.json()).then(d=>{render(d);$('#health').textContent='● 服务正常 · SQLite 数据已加载'}).catch(e=>$('#health').textContent='● 服务不可用 · '+e.message);
-const dialog=$('#missionDialog');$('#newMission').onclick=()=>dialog.showModal();$('#closeDialog').onclick=()=>dialog.close();$('#cancelDialog').onclick=()=>dialog.close();$('#missionForm').onsubmit=async e=>{e.preventDefault();const payload=Object.fromEntries(new FormData(e.currentTarget));const r=await fetch('/api/missions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}),result=await r.json();if(!r.ok){$('#formMessage').textContent=result.message;return}data.missions.unshift(result);render(data);dialog.close();$('#health').textContent=`● 任务 ${result.id} 已保存并写入审计日志`};
+const $ = (selector) => document.querySelector(selector);
+let platformData = null;
+let selectedRoute = null;
+
+const project = ([lng, lat]) => [((lng - 107.70) / 0.16) * 100, ((30.75 - lat) / 0.15) * 100];
+const metric = (label, value, unit, tone = "") => `<div class="metric"><div class="metric-label">${label}</div><div class="metric-value ${tone}">${value}<small>${unit}</small></div></div>`;
+
+function renderMap() {
+  const zones = platformData.layers.filter((x) => x.visible !== false && x.status === "published").map((x) => {
+    const geometry = JSON.parse(x.geometry_json);
+    return `<polygon points="${geometry.coordinates[0].map((p) => project(p).join(",")).join(" ")}" class="geo-zone ${x.layer_type}"><title>${x.name}</title></polygon>`;
+  }).join("");
+  const aircraft = platformData.vehicles.map((v) => {
+    const [x, y] = project([v.longitude, v.latitude]);
+    return `<g transform="translate(${x} ${y})" class="geo-aircraft"><circle r="1.7"/><text x="2.7" y="1">${v.id}</text></g>`;
+  }).join("");
+  const route = selectedRoute ? `<polyline points="${selectedRoute.points.map((p) => project(p).join(",")).join(" ")}" class="geo-route selected"><title>${selectedRoute.name}</title></polyline>` : "";
+  $("#mapCanvas").innerHTML = `<svg class="geo-map" viewBox="0 0 100 100" preserveAspectRatio="none"><rect width="100" height="100" fill="#0f1a2a"/>${zones}${route}${aircraft}</svg><div class="map-label label-north">N · WGS84</div><div class="map-label label-south">梁平县域演示坐标范围</div>`;
+}
+
+function render(data) {
+  platformData = data;
+  data.layers.forEach((x) => { if (x.visible === undefined) x.visible = true; });
+  const running = data.missions.filter((x) => x.status === "running").length;
+  const warnings = data.missions.filter((x) => x.status === "warning").length;
+  $("#metrics").innerHTML = [metric("在线飞行器", data.vehicles.length, "架"), metric("今日任务", data.missions.length, "项"), metric("运行中", running, "项", "green"), metric("待处置预警", warnings, "项", warnings ? "red" : "green")].join("");
+  renderMap();
+  $("#layerList").innerHTML = data.layers.map((x) => `<label class="layer-row"><input type="checkbox" ${x.visible && x.status === "published" ? "checked" : ""} ${x.status !== "published" ? "disabled" : ""} data-layer="${x.id}"><span class="layer-swatch ${x.layer_type}"></span><span>${x.name}</span><small>${x.status} · v${x.version}</small></label>`).join("");
+  document.querySelectorAll("[data-layer]").forEach((control) => control.onchange = () => { data.layers.find((x) => String(x.id) === control.dataset.layer).visible = control.checked; renderMap(); });
+  $("#missionList").innerHTML = data.missions.map((x) => `<article class="mission-item"><div class="mission-icon">${x.status === "running" ? "▶" : "○"}</div><div class="mission-main"><div class="mission-title">${x.name}</div><div class="mission-meta">${x.vehicle_id} · ${x.route_name} · ${x.planned_altitude}m</div></div><div class="mission-actions"><button data-detail="${x.id}">详情</button><button data-check="${x.id}">检查</button><button data-plan="${x.id}">航线</button><span class="state state-${x.status}">${x.status_label}</span></div></article>`).join("");
+  $("#ruleList").innerHTML = data.rules.map((x) => `<div class="rule-item"><span class="rule-code">${x.code}</span><span>${x.name}</span><span class="rule-level ${x.level}">${x.level_label}</span></div>`).join("");
+  $("#vehicleList").innerHTML = data.vehicles.map((x) => `<div class="vehicle-item"><div><strong>${x.name}</strong><span>${x.model} · ${x.longitude.toFixed(3)}, ${x.latitude.toFixed(3)} · ${x.altitude}m</span></div><div class="vehicle-health"><span class="health-bar"><i style="width:${x.battery}%"></i></span><span>${x.battery}%</span></div></div>`).join("");
+  $("#vehicleSelect").innerHTML = data.vehicles.map((x) => `<option value="${x.id}">${x.name}（${x.id}）</option>`).join("");
+  document.querySelectorAll("[data-detail]").forEach((b) => b.onclick = () => showDetails(b.dataset.detail));
+  document.querySelectorAll("[data-check]").forEach((b) => b.onclick = () => runAction(b.dataset.check, "check"));
+  document.querySelectorAll("[data-plan]").forEach((b) => b.onclick = () => runAction(b.dataset.plan, "routes/plan"));
+}
+
+function showError(result) {
+  $("#resultBadge").textContent = "操作失败";
+  $("#resultContent").innerHTML = `<div class="result-block blocked"><strong>${result.code}</strong><span>${result.message}</span></div>`;
+}
+
+async function showDetails(id) {
+  const response = await fetch(`/api/missions/${id}`);
+  const mission = await response.json();
+  if (!response.ok) return showError(mission);
+  const check = mission.checks[0];
+  const route = mission.routes[0];
+  $("#resultBadge").textContent = mission.status_label;
+  $("#resultContent").innerHTML = `<div class="detail-grid"><span>任务编号</span><strong>${mission.id}</strong><span>飞行器</span><strong>${mission.vehicle_id}</strong><span>起终点</span><strong>${mission.start_lng}, ${mission.start_lat} → ${mission.end_lng}, ${mission.end_lat}</strong><span>计划高度</span><strong>${mission.planned_altitude} 米</strong><span>最近检查</span><strong>${check ? `${check.decision} / ${check.risk_level}` : "尚未检查"}</strong><span>候选航线</span><strong>${route ? `${route.name} / ${route.distance_m.toFixed(1)} 米` : "尚未生成"}</strong></div>`;
+}
+
+async function runAction(id, action) {
+  const response = await fetch(`/api/missions/${id}/${action}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+  const result = await response.json();
+  if (!response.ok) return showError(result);
+  if (action === "check") {
+    $("#resultBadge").textContent = `${result.decision} · ${result.risk_level}`;
+    $("#resultContent").innerHTML = `<div class="result-summary ${result.decision}">${result.decision === "pass" ? "规则检查通过，可生成航线" : result.decision === "warning" ? "存在软约束，需人工确认" : "存在硬约束，禁止生成航线"}</div>${result.items.length ? result.items.map((x) => `<div class="result-block ${x.level}"><strong>${x.rule_code}</strong><span>${x.message}</span><small>${x.action}</small></div>`).join("") : '<div class="result-empty">没有发现冲突项</div>'}`;
+  } else {
+    selectedRoute = result;
+    renderMap();
+    $("#resultBadge").textContent = "航线已生成";
+    $("#resultContent").innerHTML = `<div class="route-result"><strong>${result.name}</strong><span>距离 ${result.distance_m} 米 · 预计 ${result.duration_s} 秒</span><span>风险等级：${result.risk_level}</span></div>`;
+  }
+}
+
+async function bootstrap() {
+  const response = await fetch("/api/bootstrap");
+  if (!response.ok) throw new Error("初始化数据加载失败");
+  render(await response.json());
+  $("#health").textContent = "● 服务正常 · SQLite 数据已加载";
+}
+
+const dialog = $("#missionDialog");
+$("#newMission").onclick = () => dialog.showModal();
+$("#closeDialog").onclick = () => dialog.close();
+$("#cancelDialog").onclick = () => dialog.close();
+$("#missionForm").onsubmit = async (event) => {
+  event.preventDefault();
+  const response = await fetch("/api/missions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(Object.fromEntries(new FormData(event.currentTarget))) });
+  const result = await response.json();
+  if (!response.ok) { $("#formMessage").textContent = result.message; return; }
+  platformData.missions.unshift(result); render(platformData); dialog.close();
+  $("#health").textContent = `● 任务 ${result.id} 已保存并写入审计日志`;
+};
+
+bootstrap().catch((error) => { $("#health").textContent = `● 服务不可用 · ${error.message}`; });

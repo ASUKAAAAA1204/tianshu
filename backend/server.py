@@ -11,7 +11,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 
-from db import connect, init_db, rows
+from db import init_db, rows, session
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -70,10 +70,10 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"status": "ok", "service": "liangping-low-altitude-base", "version": "0.2.0"})
                 return
             if route == "/api/demo/status":
-                with connect() as db:
+                with session() as db:
                     self._json({"layers": db.execute("SELECT COUNT(*) FROM layers").fetchone()[0], "missions": db.execute("SELECT COUNT(*) FROM missions").fetchone()[0], "audit_logs": db.execute("SELECT COUNT(*) FROM audit_logs").fetchone()[0]})
                 return
-            with connect() as db:
+            with session() as db:
                 resources = {
                     "/api/layers": "SELECT * FROM layers ORDER BY id",
                     "/api/vehicles": "SELECT * FROM vehicles ORDER BY id",
@@ -132,7 +132,7 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 raise ApiError(404, "NOT_FOUND", "接口不存在")
             payload = validate_mission(self._body())
-            with connect() as db:
+            with session() as db:
                 if not db.execute("SELECT 1 FROM vehicles WHERE id=?", (payload["vehicle_id"],)).fetchone():
                     raise ApiError(422, "VEHICLE_NOT_FOUND", "所选飞行器不存在")
                 try:
@@ -175,14 +175,14 @@ class Handler(BaseHTTPRequestHandler):
                     valid_point = False
                 if not valid_point:
                     raise ApiError(422, "INVALID_COORDINATE", "坐标必须位于梁平演示区域范围")
-        with connect() as db:
+        with session() as db:
             cur = db.execute("INSERT INTO layers(name,layer_type,level,geometry_json,status,source) VALUES(?,?,?,?,?,?)", (name, layer_type, level, json.dumps(payload["features"][0]["geometry"], ensure_ascii=False), "draft", "import"))
             db.execute("INSERT INTO audit_logs(action,object_type,object_id,detail_json) VALUES(?,?,?,?)", ("import", "layer", str(cur.lastrowid), json.dumps({"name":name}, ensure_ascii=False)))
             self._json({"id":cur.lastrowid,"name":name,"status":"draft","message":"图层校验通过，等待发布"}, HTTPStatus.CREATED)
 
     def _set_layer_status(self, layer_id, action):
         status = "published" if action == "publish" else "disabled"
-        with connect() as db:
+        with session() as db:
             if not db.execute("SELECT 1 FROM layers WHERE id=?", (layer_id,)).fetchone():
                 raise ApiError(404, "LAYER_NOT_FOUND", "图层不存在")
             db.execute("UPDATE layers SET status=? WHERE id=?", (status, layer_id))
@@ -190,7 +190,7 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"id":layer_id,"status":status})
 
     def _check_mission(self, mission_id):
-        with connect() as db:
+        with session() as db:
             mission = db.execute("SELECT * FROM missions WHERE id=?", (mission_id,)).fetchone()
             if not mission:
                 raise ApiError(404, "MISSION_NOT_FOUND", "任务不存在")
@@ -213,7 +213,7 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"mission_id":mission_id,"decision":decision,"risk_level":risk,"items":items})
 
     def _plan_route(self, mission_id):
-        with connect() as db:
+        with session() as db:
             mission = db.execute("SELECT * FROM missions WHERE id=?", (mission_id,)).fetchone()
             if not mission: raise ApiError(404, "MISSION_NOT_FOUND", "任务不存在")
             latest = db.execute("SELECT * FROM mission_checks WHERE mission_id=? ORDER BY id DESC LIMIT 1", (mission_id,)).fetchone()

@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
-from db import connect, init_db  # noqa: E402
+from db import connect, init_db, session  # noqa: E402
 from server import ApiError, validate_mission, Handler  # noqa: E402
 
 
@@ -23,6 +23,18 @@ class DatabaseTests(unittest.TestCase):
                 self.assertTrue(geometry["coordinates"])
             finally:
                 db.close()
+
+    def test_session_commits_and_closes_connection(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "session.db"
+            init_db(path)
+            with session(path) as db:
+                db.execute("INSERT INTO audit_logs(action,object_type,object_id,detail_json) VALUES('test','system','1','{}')")
+            verify = connect(path)
+            try:
+                self.assertEqual(verify.execute("SELECT COUNT(*) FROM audit_logs").fetchone()[0], 1)
+            finally:
+                verify.close()
 
 
 class ValidationTests(unittest.TestCase):

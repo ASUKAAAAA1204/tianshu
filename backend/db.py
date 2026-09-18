@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from contextlib import contextmanager
 from pathlib import Path
 
 
@@ -88,6 +89,19 @@ def connect(path: Path = DEFAULT_DB) -> sqlite3.Connection:
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")
     return connection
+
+
+@contextmanager
+def session(path: Path = DEFAULT_DB):
+    database = connect(path)
+    try:
+        yield database
+        database.commit()
+    except Exception:
+        database.rollback()
+        raise
+    finally:
+        database.close()
 
 
 def init_db(path: Path = DEFAULT_DB, reset: bool = False) -> None:
