@@ -166,7 +166,7 @@ class Handler(BaseHTTPRequestHandler):
         for feature in payload["features"]:
             geometry = feature.get("geometry", {})
             coords = geometry.get("coordinates")
-            if geometry.get("type") != "Polygon" or not coords or not coords[0] or len(coords[0]) < 4:
+            if geometry.get("type") != "Polygon" or not coords or not coords[0] or len(coords[0]) < 4 or coords[0][0] != coords[0][-1]:
                 raise ApiError(422, "INVALID_GEOMETRY", "当前仅支持闭合 Polygon，且至少需要4个坐标点")
             for point in coords[0]:
                 try:
@@ -243,7 +243,10 @@ def validate_mission(payload):
             raise ApiError(422, "INVALID_COORDINATE", f"{key} 必须为数字")
         if not minimum <= payload[key] <= maximum:
             raise ApiError(422, "OUT_OF_DEMO_AREA", f"{key} 超出演示区域")
-    payload["planned_altitude"] = float(payload["planned_altitude"])
+    try:
+        payload["planned_altitude"] = float(payload["planned_altitude"])
+    except (TypeError, ValueError):
+        raise ApiError(422, "INVALID_ALTITUDE", "计划高度必须为数字")
     if not 20 <= payload["planned_altitude"] <= 1200:
         raise ApiError(422, "INVALID_ALTITUDE", "计划高度必须在20至1200米之间")
     return {key: payload[key] for key in required}

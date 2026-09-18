@@ -69,6 +69,13 @@ class ValidationTests(unittest.TestCase):
         # The endpoint validation is exercised by the integration check; this guards the expected error contract.
         self.assertEqual(payload["features"][0]["geometry"]["type"], "Polygon")
 
+    def test_rejects_non_numeric_altitude(self):
+        payload = self.valid()
+        payload["planned_altitude"] = "not-a-number"
+        with self.assertRaises(ApiError) as context:
+            validate_mission(payload)
+        self.assertEqual(context.exception.code, "INVALID_ALTITUDE")
+
 
 if __name__ == "__main__":
     unittest.main()
