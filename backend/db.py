@@ -141,8 +141,8 @@ def init_db(path: Path = DEFAULT_DB, reset: bool = False) -> None:
         db.executescript(SCHEMA)
         if db.execute("SELECT COUNT(*) FROM vehicles").fetchone()[0] == 0:
             seed(db)
-        if db.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 0:
-            db.execute("INSERT INTO users(username,password_hash,role) VALUES(?,?,?)", ("admin", hashlib.sha256("admin123".encode()).hexdigest(), "admin"))
+        password_hash = hashlib.sha256("admin123".encode()).hexdigest()
+        db.executemany("INSERT OR IGNORE INTO users(username,password_hash,role) VALUES(?,?,?)", [("admin", password_hash, "admin"), ("dispatcher", password_hash, "dispatcher"), ("observer", password_hash, "observer"), ("auditor", password_hash, "auditor")])
         db.commit()
     finally:
         db.close()

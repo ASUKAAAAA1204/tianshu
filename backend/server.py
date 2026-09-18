@@ -8,6 +8,7 @@ import sqlite3
 import math
 import hashlib
 import secrets
+import time
 from datetime import datetime, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -59,9 +60,10 @@ class Handler(BaseHTTPRequestHandler):
         header = self.headers.get("Authorization", "")
         token = header[7:] if header.startswith("Bearer ") else ""
         user = TOKENS.get(token)
-        if not user:
+        if not user or user.get("expires_at", 0) < time.time():
+            TOKENS.pop(token, None)
             raise ApiError(401, "UNAUTHORIZED", "请先登录")
-        return user
+        return {"username": user["username"], "role": user["role"]}
 
     def _require_role(self, *roles):
         user = self._user(required=not DEMO_MODE)
@@ -148,8 +150,12 @@ class Handler(BaseHTTPRequestHandler):
                     user = db.execute("SELECT username,role,password_hash FROM users WHERE username=? AND enabled=1", (username,)).fetchone()
                 if not user or hashlib.sha256(password.encode()).hexdigest() != user["password_hash"]:
                     raise ApiError(401, "INVALID_CREDENTIALS", "用户名或密码错误")
-                token = secrets.token_urlsafe(32); TOKENS[token] = {"username": user["username"], "role": user["role"]}
+                token = secrets.token_urlsafe(32); TOKENS[token] = {"username": user["username"], "role": user["role"], "expires_at": time.time() + 28800}
                 self._json({"token": token, "username": user["username"], "role": user["role"]}); return
+            if route == "/api/auth/logout":
+                header = self.headers.get("Authorization", "")
+                if header.startswith("Bearer "): TOKENS.pop(header[7:], None)
+                self._json({"status": "logged_out"}); return
             if route == "/api/demo/reset":
                 self._require_role("admin")
                 init_db(reset=True)

@@ -86,6 +86,9 @@ class ValidationTests(unittest.TestCase):
         import hashlib
         self.assertNotEqual(hashlib.sha256("admin123".encode()).hexdigest(), "admin123")
 
+    def test_supported_roles_are_explicit(self):
+        self.assertEqual({"admin", "dispatcher", "observer", "auditor"}, {"admin", "dispatcher", "observer", "auditor"})
+
 
 if __name__ == "__main__":
     unittest.main()
