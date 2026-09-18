@@ -7,7 +7,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
 from db import connect, database_capabilities, database_config, init_db, session  # noqa: E402
 from server import ApiError, validate_mission, Handler  # noqa: E402
-from repository import SQLiteStorage, build_storage  # noqa: E402
+from repository import PostgresStorage, SQLiteStorage, build_storage  # noqa: E402
 
 
 class DatabaseTests(unittest.TestCase):
@@ -69,8 +69,12 @@ class DatabaseTests(unittest.TestCase):
         self.assertEqual(storage.info.spatial_engine, "polygon_python")
 
     def test_postgres_adapter_fails_explicitly(self):
-        with self.assertRaises(RuntimeError):
-            build_storage("postgresql://user:pass@localhost:5432/demo")
+        try:
+            storage = build_storage("postgresql://user:pass@localhost:5432/demo")
+        except RuntimeError as error:
+            self.assertIn("psycopg", str(error))
+        else:
+            self.assertIsInstance(storage, PostgresStorage)
 
 
 class ValidationTests(unittest.TestCase):

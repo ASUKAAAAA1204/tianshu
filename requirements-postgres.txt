@@ -1,0 +1,3 @@
+# Optional production database adapter.
+# Install with: pip install -r requirements-postgres.txt
+psycopg[binary]>=3.2,<4
