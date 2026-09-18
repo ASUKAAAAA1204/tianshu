@@ -80,6 +80,26 @@ CREATE TABLE IF NOT EXISTS routes (
     risk_level TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+CREATE TABLE IF NOT EXISTS flight_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    mission_id TEXT NOT NULL REFERENCES missions(id),
+    status TEXT NOT NULL DEFAULT 'ready',
+    progress REAL NOT NULL DEFAULT 0,
+    telemetry_json TEXT NOT NULL DEFAULT '{}',
+    started_at TEXT,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    mission_id TEXT NOT NULL REFERENCES missions(id),
+    event_type TEXT NOT NULL,
+    severity TEXT NOT NULL,
+    message TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'open',
+    payload_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    resolved_at TEXT
+);
 """
 
 

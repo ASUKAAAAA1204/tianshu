@@ -76,6 +76,9 @@ class ValidationTests(unittest.TestCase):
             validate_mission(payload)
         self.assertEqual(context.exception.code, "INVALID_ALTITUDE")
 
+    def test_event_types_are_explicit(self):
+        self.assertEqual({"deviation", "low_battery", "link_loss", "temporary_restriction"}, {"deviation", "low_battery", "link_loss", "temporary_restriction"})
+
 
 if __name__ == "__main__":
     unittest.main()

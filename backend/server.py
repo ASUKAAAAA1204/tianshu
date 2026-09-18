@@ -6,6 +6,7 @@ import os
 import re
 import sqlite3
 import math
+from datetime import datetime, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -101,6 +102,10 @@ class Handler(BaseHTTPRequestHandler):
                 if route_match:
                     self._json(rows(db, "SELECT * FROM routes WHERE mission_id=? ORDER BY id DESC", (route_match.group(1),)))
                     return
+                event_match = re.fullmatch(r"/api/missions/([^/]+)/events", route)
+                if event_match:
+                    self._json(rows(db, "SELECT * FROM events WHERE mission_id=? ORDER BY id DESC", (event_match.group(1),)))
+                    return
             self._file(FRONTEND / ("index.html" if route in ("/", "/index.html") else route.lstrip("/")))
         except ApiError as error:
             self._error(error)
@@ -117,6 +122,15 @@ class Handler(BaseHTTPRequestHandler):
             if route == "/api/layers/import":
                 self._import_layer(self._body())
                 return
+            start_match = re.fullmatch(r"/api/missions/([^/]+)/flight/start", route)
+            event_match = re.fullmatch(r"/api/missions/([^/]+)/events", route)
+            resolve_match = re.fullmatch(r"/api/events/(\d+)/resolve", route)
+            if start_match:
+                self._start_flight(start_match.group(1)); return
+            if event_match:
+                self._inject_event(event_match.group(1), self._body()); return
+            if resolve_match:
+                self._resolve_event(int(resolve_match.group(1))); return
             publish_match = re.fullmatch(r"/api/layers/(\d+)/(publish|disable)", route)
             if publish_match:
                 self._set_layer_status(int(publish_match.group(1)), publish_match.group(2))
@@ -227,6 +241,35 @@ class Handler(BaseHTTPRequestHandler):
             cursor = db.execute("INSERT INTO routes(mission_id,name,points_json,distance_m,duration_s,risk_level) VALUES(?,?,?,?,?,?)", (mission_id, "主航线-直连", json.dumps(points), distance, duration, "medium" if latest["decision"] == "warning" else "low"))
             db.execute("INSERT INTO audit_logs(action,object_type,object_id,detail_json) VALUES(?,?,?,?)", ("plan", "route", str(cursor.lastrowid), json.dumps({"mission_id":mission_id}, ensure_ascii=False)))
             self._json({"id":cursor.lastrowid,"mission_id":mission_id,"name":"主航线-直连","points":points,"distance_m":round(distance,1),"duration_s":round(duration,1),"risk_level":"medium" if latest["decision"] == "warning" else "low"}, HTTPStatus.CREATED)
+
+    def _start_flight(self, mission_id):
+        with session() as db:
+            mission = db.execute("SELECT * FROM missions WHERE id=?", (mission_id,)).fetchone()
+            if not mission: raise ApiError(404, "MISSION_NOT_FOUND", "任务不存在")
+            route = db.execute("SELECT * FROM routes WHERE mission_id=? ORDER BY id DESC LIMIT 1", (mission_id,)).fetchone()
+            if not route: raise ApiError(409, "ROUTE_REQUIRED", "请先生成航线")
+            telemetry = {"longitude": mission["start_lng"], "latitude": mission["start_lat"], "altitude": mission["planned_altitude"], "battery": 100, "link": "online"}
+            cur = db.execute("INSERT INTO flight_sessions(mission_id,status,progress,telemetry_json,started_at) VALUES(?,?,?,?,CURRENT_TIMESTAMP)", (mission_id, "running", 0, json.dumps(telemetry)))
+            db.execute("UPDATE missions SET status='running',status_label='运行中' WHERE id=?", (mission_id,))
+            db.execute("INSERT INTO audit_logs(action,object_type,object_id,detail_json) VALUES(?,?,?,?)", ("flight_start", "mission", mission_id, json.dumps(telemetry, ensure_ascii=False)))
+            self._json({"session_id":cur.lastrowid,"mission_id":mission_id,"status":"running","progress":0,"telemetry":telemetry}, HTTPStatus.CREATED)
+
+    def _inject_event(self, mission_id, payload):
+        allowed = {"deviation":("warning","发生航线偏航"),"low_battery":("critical","飞行器电量不足"),"link_loss":("critical","飞行器链路中断"),"temporary_restriction":("critical","前方出现临时限制区")}
+        event_type = payload.get("event_type")
+        if event_type not in allowed: raise ApiError(422, "INVALID_EVENT_TYPE", "不支持的事件类型")
+        with session() as db:
+            if not db.execute("SELECT 1 FROM missions WHERE id=?", (mission_id,)).fetchone(): raise ApiError(404, "MISSION_NOT_FOUND", "任务不存在")
+            severity, message = allowed[event_type]
+            cur = db.execute("INSERT INTO events(mission_id,event_type,severity,message,payload_json) VALUES(?,?,?,?,?)", (mission_id,event_type,severity,message,json.dumps(payload,ensure_ascii=False)))
+            db.execute("INSERT INTO audit_logs(action,object_type,object_id,detail_json) VALUES(?,?,?,?)", ("event", "mission", mission_id, json.dumps(payload, ensure_ascii=False)))
+            self._json({"id":cur.lastrowid,"mission_id":mission_id,"event_type":event_type,"severity":severity,"message":message,"status":"open"}, HTTPStatus.CREATED)
+
+    def _resolve_event(self, event_id):
+        with session() as db:
+            if not db.execute("SELECT 1 FROM events WHERE id=?", (event_id,)).fetchone(): raise ApiError(404, "EVENT_NOT_FOUND", "事件不存在")
+            db.execute("UPDATE events SET status='resolved',resolved_at=CURRENT_TIMESTAMP WHERE id=?", (event_id,))
+            self._json({"id":event_id,"status":"resolved"})
 
 
 def validate_mission(payload):
