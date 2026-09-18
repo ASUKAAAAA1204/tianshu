@@ -17,6 +17,7 @@ from urllib.parse import urlparse
 
 from db import database_capabilities, init_db, rows, session
 from geometry import segment_intersects_polygon
+from repository import build_storage
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -91,7 +92,9 @@ class Handler(BaseHTTPRequestHandler):
         try:
             route = urlparse(self.path).path
             if route == "/api/health":
-                self._json({"status": "ok", "service": "liangping-low-altitude-base", "version": "0.4.0", "database": database_capabilities()})
+                capabilities = database_capabilities()
+                storage = build_storage()
+                self._json({"status": "ok", "service": "liangping-low-altitude-base", "version": "0.4.0", "database": {**capabilities, "adapter": storage.info.backend, "adapter_ready": storage.info.ready}})
                 return
             if route == "/api/auth/me":
                 self._json(self._user(required=True)); return

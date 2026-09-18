@@ -7,6 +7,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
 from db import connect, database_capabilities, database_config, init_db, session  # noqa: E402
 from server import ApiError, validate_mission, Handler  # noqa: E402
+from repository import SQLiteStorage, build_storage  # noqa: E402
 
 
 class DatabaseTests(unittest.TestCase):
@@ -60,6 +61,16 @@ class DatabaseTests(unittest.TestCase):
         config = database_config("oracle://localhost/demo")
         self.assertFalse(config["ready"])
         self.assertEqual(config["backend"], "unknown")
+
+    def test_storage_adapter_contract(self):
+        storage = build_storage("sqlite:///tmp/adapter-test.db")
+        self.assertIsInstance(storage, SQLiteStorage)
+        self.assertTrue(storage.info.ready)
+        self.assertEqual(storage.info.spatial_engine, "polygon_python")
+
+    def test_postgres_adapter_fails_explicitly(self):
+        with self.assertRaises(RuntimeError):
+            build_storage("postgresql://user:pass@localhost:5432/demo")
 
 
 class ValidationTests(unittest.TestCase):
