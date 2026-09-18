@@ -74,8 +74,12 @@ class ValidationTests(unittest.TestCase):
 
     def test_haversine_and_geometry_helpers_exist(self):
         from server import haversine, segment_intersects_box
+        from geometry import segment_intersects_polygon
         self.assertGreater(haversine(107.74, 30.64, 107.78, 30.66), 1000)
         self.assertTrue(segment_intersects_box((107.70, 30.60), (107.90, 30.80), (107.75, 30.65, 107.80, 30.70)))
+        triangle = {"type": "Polygon", "coordinates": [[[0, 0], [10, 0], [0, 10], [0, 0]]]}
+        self.assertTrue(segment_intersects_polygon((1, 1), (2, 2), triangle))
+        self.assertFalse(segment_intersects_polygon((9, 9), (10, 10), triangle))
 
     def test_rejects_non_numeric_coordinate(self):
         from server import Handler

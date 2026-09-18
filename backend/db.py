@@ -141,9 +141,9 @@ def database_capabilities() -> dict:
     backend = "postgresql" if DATABASE_URL.startswith(("postgresql://", "postgres://")) else "sqlite"
     return {
         "backend": backend,
-        "spatial_engine": "postgis" if backend == "postgresql" else "bounding_box",
+        "spatial_engine": "postgis" if backend == "postgresql" else "polygon_python",
         "configured": backend == "sqlite",
-        "message": "SQLite离线模式已启用" if backend == "sqlite" else "PostgreSQL连接已配置，驱动适配将在下一阶段启用",
+        "message": "SQLite离线模式已启用，使用严格Polygon计算" if backend == "sqlite" else "PostgreSQL连接已配置，驱动适配将在下一阶段启用",
     }
 
 

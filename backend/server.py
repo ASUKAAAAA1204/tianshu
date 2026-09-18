@@ -16,6 +16,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from db import database_capabilities, init_db, rows, session
+from geometry import segment_intersects_polygon
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -287,10 +288,7 @@ class Handler(BaseHTTPRequestHandler):
             start, end = (mission["start_lng"], mission["start_lat"]), (mission["end_lng"], mission["end_lat"])
             for layer in db.execute("SELECT * FROM layers WHERE status='published'").fetchall():
                 geometry = json.loads(layer["geometry_json"])
-                ring = geometry.get("coordinates", [[]])[0]
-                if not ring: continue
-                lngs, lats = [p[0] for p in ring], [p[1] for p in ring]
-                if segment_intersects_box(start, end, (min(lngs), min(lats), max(lngs), max(lats))):
+                if segment_intersects_polygon(start, end, geometry):
                     level = "hard" if layer["level"] == "hard" else "soft"
                     items.append({"rule_code":"R-001" if level == "hard" else "R-003","level":level,"message":f"航线穿越{layer['name']}","action":"调整航线" if level == "hard" else "人工确认后继续"})
             decision = "blocked" if any(x["level"] == "hard" for x in items) else ("warning" if items else "pass")
