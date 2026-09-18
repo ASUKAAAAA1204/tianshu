@@ -246,6 +246,8 @@ class Handler(BaseHTTPRequestHandler):
         with session() as db:
             mission = db.execute("SELECT * FROM missions WHERE id=?", (mission_id,)).fetchone()
             if not mission: raise ApiError(404, "MISSION_NOT_FOUND", "任务不存在")
+            active = db.execute("SELECT 1 FROM flight_sessions WHERE mission_id=? AND status='running'", (mission_id,)).fetchone()
+            if active: raise ApiError(409, "FLIGHT_ALREADY_RUNNING", "该任务已经在模拟飞行中")
             route = db.execute("SELECT * FROM routes WHERE mission_id=? ORDER BY id DESC LIMIT 1", (mission_id,)).fetchone()
             if not route: raise ApiError(409, "ROUTE_REQUIRED", "请先生成航线")
             telemetry = {"longitude": mission["start_lng"], "latitude": mission["start_lat"], "altitude": mission["planned_altitude"], "battery": 100, "link": "online"}
@@ -267,7 +269,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def _resolve_event(self, event_id):
         with session() as db:
-            if not db.execute("SELECT 1 FROM events WHERE id=?", (event_id,)).fetchone(): raise ApiError(404, "EVENT_NOT_FOUND", "事件不存在")
+            event = db.execute("SELECT status FROM events WHERE id=?", (event_id,)).fetchone()
+            if not event: raise ApiError(404, "EVENT_NOT_FOUND", "事件不存在")
+            if event["status"] == "resolved": raise ApiError(409, "EVENT_ALREADY_RESOLVED", "事件已经处置")
             db.execute("UPDATE events SET status='resolved',resolved_at=CURRENT_TIMESTAMP WHERE id=?", (event_id,))
             self._json({"id":event_id,"status":"resolved"})
 
