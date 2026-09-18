@@ -15,7 +15,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 
-from db import init_db, rows, session
+from db import database_capabilities, init_db, rows, session
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -90,7 +90,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             route = urlparse(self.path).path
             if route == "/api/health":
-                self._json({"status": "ok", "service": "liangping-low-altitude-base", "version": "0.2.0"})
+                self._json({"status": "ok", "service": "liangping-low-altitude-base", "version": "0.4.0", "database": database_capabilities()})
                 return
             if route == "/api/auth/me":
                 self._json(self._user(required=True)); return

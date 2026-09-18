@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
-from db import connect, init_db, session  # noqa: E402
+from db import connect, database_capabilities, init_db, session  # noqa: E402
 from server import ApiError, validate_mission, Handler  # noqa: E402
 
 
@@ -35,6 +35,20 @@ class DatabaseTests(unittest.TestCase):
                 self.assertEqual(verify.execute("SELECT COUNT(*) FROM audit_logs").fetchone()[0], 1)
             finally:
                 verify.close()
+
+    def test_migrations_are_idempotent(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "migration.db"
+            init_db(path)
+            init_db(path)
+            db = connect(path)
+            try:
+                self.assertEqual(db.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0], 3)
+            finally:
+                db.close()
+
+    def test_database_capabilities_report_sqlite(self):
+        self.assertEqual(database_capabilities()["backend"], "sqlite")
 
 
 class ValidationTests(unittest.TestCase):

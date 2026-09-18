@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import hashlib
+import os
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -10,6 +11,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DB = ROOT / "data" / "platform.db"
 DEMO_DIR = ROOT / "data" / "demo"
+DATABASE_URL = os.environ.get("DATABASE_URL", f"sqlite:///{DEFAULT_DB.as_posix()}")
+
+
+MIGRATIONS = [
+    (1, "audit actor", "ALTER TABLE audit_logs ADD COLUMN actor_username TEXT"),
+    (2, "login attempts", "ALTER TABLE users ADD COLUMN failed_attempts INTEGER NOT NULL DEFAULT 0"),
+    (3, "account lock", "ALTER TABLE users ADD COLUMN locked_until REAL NOT NULL DEFAULT 0"),
+]
 
 
 SCHEMA = """
@@ -112,6 +121,11 @@ CREATE TABLE IF NOT EXISTS users (
     locked_until REAL NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    version INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 """
 
 
@@ -121,6 +135,29 @@ def connect(path: Path = DEFAULT_DB) -> sqlite3.Connection:
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")
     return connection
+
+
+def database_capabilities() -> dict:
+    backend = "postgresql" if DATABASE_URL.startswith(("postgresql://", "postgres://")) else "sqlite"
+    return {
+        "backend": backend,
+        "spatial_engine": "postgis" if backend == "postgresql" else "bounding_box",
+        "configured": backend == "sqlite",
+        "message": "SQLite离线模式已启用" if backend == "sqlite" else "PostgreSQL连接已配置，驱动适配将在下一阶段启用",
+    }
+
+
+def apply_migrations(db: sqlite3.Connection) -> None:
+    applied = {row[0] for row in db.execute("SELECT version FROM schema_migrations").fetchall()}
+    for version, name, statement in MIGRATIONS:
+        if version in applied:
+            continue
+        try:
+            db.execute(statement)
+        except sqlite3.OperationalError as error:
+            if "duplicate column name" not in str(error).lower():
+                raise
+        db.execute("INSERT INTO schema_migrations(version,name) VALUES(?,?)", (version, name))
 
 
 @contextmanager
@@ -142,15 +179,7 @@ def init_db(path: Path = DEFAULT_DB, reset: bool = False) -> None:
     db = connect(path)
     try:
         db.executescript(SCHEMA)
-        try:
-            db.execute("ALTER TABLE audit_logs ADD COLUMN actor_username TEXT")
-        except sqlite3.OperationalError:
-            pass
-        for statement in ("ALTER TABLE users ADD COLUMN failed_attempts INTEGER NOT NULL DEFAULT 0", "ALTER TABLE users ADD COLUMN locked_until REAL NOT NULL DEFAULT 0"):
-            try:
-                db.execute(statement)
-            except sqlite3.OperationalError:
-                pass
+        apply_migrations(db)
         if db.execute("SELECT COUNT(*) FROM vehicles").fetchone()[0] == 0:
             seed(db)
         password_hash = hashlib.sha256("admin123".encode()).hexdigest()
