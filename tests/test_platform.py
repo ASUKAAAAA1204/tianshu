@@ -8,6 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
 from db import connect, database_capabilities, database_config, init_db, session  # noqa: E402
 from server import ApiError, validate_mission, Handler  # noqa: E402
 from repository import PostgresStorage, SQLiteStorage, build_storage  # noqa: E402
+from spatial_repository import INTERSECTION_SQL  # noqa: E402
 
 
 class DatabaseTests(unittest.TestCase):
@@ -75,6 +76,11 @@ class DatabaseTests(unittest.TestCase):
             self.assertIn("psycopg", str(error))
         else:
             self.assertIsInstance(storage, PostgresStorage)
+
+    def test_postgis_query_is_parameterized(self):
+        self.assertIn("ST_Intersects", INTERSECTION_SQL)
+        self.assertIn("%s", INTERSECTION_SQL)
+        self.assertNotIn("107.745", INTERSECTION_SQL)
 
 
 class ValidationTests(unittest.TestCase):
