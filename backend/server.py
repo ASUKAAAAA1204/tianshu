@@ -63,6 +63,12 @@ class Handler(BaseHTTPRequestHandler):
             raise ApiError(401, "UNAUTHORIZED", "请先登录")
         return user
 
+    def _require_role(self, *roles):
+        user = self._user(required=not DEMO_MODE)
+        if not DEMO_MODE and user["role"] not in roles:
+            raise ApiError(403, "FORBIDDEN", "当前角色无权执行此操作")
+        return user
+
     def _file(self, path: Path):
         try:
             resolved = path.resolve()
@@ -145,10 +151,12 @@ class Handler(BaseHTTPRequestHandler):
                 token = secrets.token_urlsafe(32); TOKENS[token] = {"username": user["username"], "role": user["role"]}
                 self._json({"token": token, "username": user["username"], "role": user["role"]}); return
             if route == "/api/demo/reset":
+                self._require_role("admin")
                 init_db(reset=True)
                 self._json({"status":"reset","message":"演示数据已重置"})
                 return
             if route == "/api/layers/import":
+                self._require_role("admin", "dispatcher")
                 self._import_layer(self._body())
                 return
             start_match = re.fullmatch(r"/api/missions/([^/]+)/flight/start", route)
@@ -156,27 +164,35 @@ class Handler(BaseHTTPRequestHandler):
             resolve_match = re.fullmatch(r"/api/events/(\d+)/resolve", route)
             tick_match = re.fullmatch(r"/api/missions/([^/]+)/flight/tick", route)
             if start_match:
+                self._require_role("admin", "dispatcher")
                 self._start_flight(start_match.group(1)); return
             if event_match:
+                self._require_role("admin", "dispatcher")
                 self._inject_event(event_match.group(1), self._body()); return
             if resolve_match:
+                self._require_role("admin", "dispatcher")
                 self._resolve_event(int(resolve_match.group(1))); return
             if tick_match:
+                self._require_role("admin", "dispatcher")
                 self._tick_flight(tick_match.group(1), self._body()); return
             publish_match = re.fullmatch(r"/api/layers/(\d+)/(publish|disable)", route)
             if publish_match:
+                self._require_role("admin", "dispatcher")
                 self._set_layer_status(int(publish_match.group(1)), publish_match.group(2))
                 return
             if route != "/api/missions":
                 check_match = re.fullmatch(r"/api/missions/([^/]+)/check", route)
                 plan_match = re.fullmatch(r"/api/missions/([^/]+)/routes/plan", route)
                 if check_match:
+                    self._require_role("admin", "dispatcher")
                     self._check_mission(check_match.group(1))
                     return
                 if plan_match:
+                    self._require_role("admin", "dispatcher")
                     self._plan_route(plan_match.group(1))
                     return
                 raise ApiError(404, "NOT_FOUND", "接口不存在")
+            self._require_role("admin", "dispatcher")
             payload = validate_mission(self._body())
             with session() as db:
                 if not db.execute("SELECT 1 FROM vehicles WHERE id=?", (payload["vehicle_id"],)).fetchone():
