@@ -96,6 +96,13 @@ class Handler(BaseHTTPRequestHandler):
                 storage = build_storage()
                 self._json({"status": "ok", "service": "liangping-low-altitude-base", "version": "0.4.0", "database": {**capabilities, "adapter": storage.info.backend, "adapter_ready": storage.info.ready}})
                 return
+            if route == "/api/health/deep":
+                try:
+                    storage = build_storage()
+                    self._json({"status": "ready", "database": storage.info.__dict__, "deep": storage.deep_health()})
+                except Exception as error:
+                    self._json({"status": "unavailable", "error": str(error)}, HTTPStatus.SERVICE_UNAVAILABLE)
+                return
             if route == "/api/auth/me":
                 self._json(self._user(required=True)); return
             if route == "/api/demo/status":

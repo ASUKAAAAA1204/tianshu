@@ -33,6 +33,9 @@ class StorageAdapter:
     def session(self) -> Iterator[object]:
         raise NotImplementedError
 
+    def deep_health(self) -> dict:
+        raise NotImplementedError
+
 
 class SQLiteStorage(StorageAdapter):
     def __init__(self, path: Path = DEFAULT_DB):
@@ -52,7 +55,13 @@ class SQLiteStorage(StorageAdapter):
             db.rollback()
             raise
         finally:
-                db.close()
+            db.close()
+
+    def deep_health(self) -> dict:
+        with self.session() as db:
+            db.execute("SELECT 1").fetchone()
+            migration = db.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[0]
+        return {"status": "ready", "connection": "ok", "spatial_extension": "python_polygon", "migration_version": migration, "probe": "ok"}
 
 
 class PostgresStorage(StorageAdapter):
@@ -79,6 +88,13 @@ class PostgresStorage(StorageAdapter):
             raise
         finally:
             connection.close()
+
+    def deep_health(self) -> dict:
+        with self.session() as db:
+            with db.cursor() as cursor:
+                cursor.execute("SELECT postgis_full_version(), (SELECT MAX(version) FROM schema_migrations)")
+                postgis_version, migration_version = cursor.fetchone()
+        return {"status": "ready", "connection": "ok", "spatial_extension": postgis_version, "migration_version": migration_version, "probe": "ok"}
 
 
 def build_storage(url: str | None = None) -> StorageAdapter:
