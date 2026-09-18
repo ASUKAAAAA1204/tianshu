@@ -108,6 +108,8 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash TEXT NOT NULL,
     role TEXT NOT NULL,
     enabled INTEGER NOT NULL DEFAULT 1,
+    failed_attempts INTEGER NOT NULL DEFAULT 0,
+    locked_until REAL NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 """
@@ -144,6 +146,11 @@ def init_db(path: Path = DEFAULT_DB, reset: bool = False) -> None:
             db.execute("ALTER TABLE audit_logs ADD COLUMN actor_username TEXT")
         except sqlite3.OperationalError:
             pass
+        for statement in ("ALTER TABLE users ADD COLUMN failed_attempts INTEGER NOT NULL DEFAULT 0", "ALTER TABLE users ADD COLUMN locked_until REAL NOT NULL DEFAULT 0"):
+            try:
+                db.execute(statement)
+            except sqlite3.OperationalError:
+                pass
         if db.execute("SELECT COUNT(*) FROM vehicles").fetchone()[0] == 0:
             seed(db)
         password_hash = hashlib.sha256("admin123".encode()).hexdigest()

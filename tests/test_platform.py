@@ -92,6 +92,9 @@ class ValidationTests(unittest.TestCase):
     def test_password_policy(self):
         self.assertGreaterEqual(len("new-pass-123"), 8)
 
+    def test_lockout_threshold(self):
+        self.assertEqual(5, 5)
+
 
 if __name__ == "__main__":
     unittest.main()

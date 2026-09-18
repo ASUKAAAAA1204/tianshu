@@ -147,11 +147,19 @@ class Handler(BaseHTTPRequestHandler):
             if route == "/api/auth/login":
                 payload = self._body(); username, password = payload.get("username", ""), payload.get("password", "")
                 with session() as db:
-                    user = db.execute("SELECT username,role,password_hash FROM users WHERE username=? AND enabled=1", (username,)).fetchone()
+                    user = db.execute("SELECT username,role,password_hash,failed_attempts,locked_until FROM users WHERE username=? AND enabled=1", (username,)).fetchone()
+                    if user and user["locked_until"] > time.time():
+                        raise ApiError(429, "ACCOUNT_LOCKED", "登录失败次数过多，请稍后再试")
                 if not user or hashlib.sha256(password.encode()).hexdigest() != user["password_hash"]:
                     with session() as audit_db:
                         audit_db.execute("INSERT INTO audit_logs(action,object_type,object_id,detail_json,actor_username) VALUES(?,?,?,?,?)", ("login_failed", "user", username or "unknown", "{}", username or "unknown"))
+                        if user:
+                            attempts = user["failed_attempts"] + 1
+                            locked_until = time.time() + 900 if attempts >= 5 else 0
+                            audit_db.execute("UPDATE users SET failed_attempts=?,locked_until=? WHERE username=?", (attempts, locked_until, username))
                     raise ApiError(401, "INVALID_CREDENTIALS", "用户名或密码错误")
+                with session() as db:
+                    db.execute("UPDATE users SET failed_attempts=0,locked_until=0 WHERE username=?", (username,))
                 token = secrets.token_urlsafe(32); TOKENS[token] = {"username": user["username"], "role": user["role"], "expires_at": time.time() + 28800}
                 self._json({"token": token, "username": user["username"], "role": user["role"]}); return
             if route == "/api/auth/change-password":
