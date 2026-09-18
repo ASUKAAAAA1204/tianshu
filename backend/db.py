@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     object_type TEXT NOT NULL,
     object_id TEXT NOT NULL,
     detail_json TEXT NOT NULL,
+    actor_username TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE TABLE IF NOT EXISTS mission_checks (
@@ -139,6 +140,10 @@ def init_db(path: Path = DEFAULT_DB, reset: bool = False) -> None:
     db = connect(path)
     try:
         db.executescript(SCHEMA)
+        try:
+            db.execute("ALTER TABLE audit_logs ADD COLUMN actor_username TEXT")
+        except sqlite3.OperationalError:
+            pass
         if db.execute("SELECT COUNT(*) FROM vehicles").fetchone()[0] == 0:
             seed(db)
         password_hash = hashlib.sha256("admin123".encode()).hexdigest()

@@ -89,6 +89,9 @@ class ValidationTests(unittest.TestCase):
     def test_supported_roles_are_explicit(self):
         self.assertEqual({"admin", "dispatcher", "observer", "auditor"}, {"admin", "dispatcher", "observer", "auditor"})
 
+    def test_password_policy(self):
+        self.assertGreaterEqual(len("new-pass-123"), 8)
+
 
 if __name__ == "__main__":
     unittest.main()

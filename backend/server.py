@@ -149,9 +149,20 @@ class Handler(BaseHTTPRequestHandler):
                 with session() as db:
                     user = db.execute("SELECT username,role,password_hash FROM users WHERE username=? AND enabled=1", (username,)).fetchone()
                 if not user or hashlib.sha256(password.encode()).hexdigest() != user["password_hash"]:
+                    with session() as audit_db:
+                        audit_db.execute("INSERT INTO audit_logs(action,object_type,object_id,detail_json,actor_username) VALUES(?,?,?,?,?)", ("login_failed", "user", username or "unknown", "{}", username or "unknown"))
                     raise ApiError(401, "INVALID_CREDENTIALS", "用户名或密码错误")
                 token = secrets.token_urlsafe(32); TOKENS[token] = {"username": user["username"], "role": user["role"], "expires_at": time.time() + 28800}
                 self._json({"token": token, "username": user["username"], "role": user["role"]}); return
+            if route == "/api/auth/change-password":
+                actor = self._user(required=True); payload = self._body(); old, new = payload.get("old_password", ""), payload.get("new_password", "")
+                if len(new) < 8: raise ApiError(422, "WEAK_PASSWORD", "新密码至少需要8位")
+                with session() as db:
+                    user = db.execute("SELECT password_hash FROM users WHERE username=?", (actor["username"],)).fetchone()
+                    if not user or hashlib.sha256(old.encode()).hexdigest() != user["password_hash"]: raise ApiError(401, "INVALID_PASSWORD", "原密码错误")
+                    db.execute("UPDATE users SET password_hash=? WHERE username=?", (hashlib.sha256(new.encode()).hexdigest(), actor["username"]))
+                    db.execute("INSERT INTO audit_logs(action,object_type,object_id,detail_json,actor_username) VALUES(?,?,?,?,?)", ("password_change", "user", actor["username"], "{}", actor["username"]))
+                self._json({"status":"changed"}); return
             if route == "/api/auth/logout":
                 header = self.headers.get("Authorization", "")
                 if header.startswith("Bearer "): TOKENS.pop(header[7:], None)
