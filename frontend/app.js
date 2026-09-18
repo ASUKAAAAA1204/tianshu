@@ -1,6 +1,7 @@
 const $ = (selector) => document.querySelector(selector);
 let platformData = null;
 let selectedRoute = null;
+let currentRole = "admin";
 const apiFetch = (url, options = {}) => { options.headers = { ...(options.headers || {}), ...(localStorage.getItem("lp_token") ? { Authorization: `Bearer ${localStorage.getItem("lp_token")}` } : {}) }; return fetch(url, options); };
 
 const project = ([lng, lat]) => [((lng - 107.70) / 0.16) * 100, ((30.75 - lat) / 0.15) * 100];
@@ -28,7 +29,8 @@ function render(data) {
   renderMap();
   $("#layerList").innerHTML = data.layers.map((x) => `<label class="layer-row"><input type="checkbox" ${x.visible && x.status === "published" ? "checked" : ""} ${x.status !== "published" ? "disabled" : ""} data-layer="${x.id}"><span class="layer-swatch ${x.layer_type}"></span><span>${x.name}</span><small>${x.status} · v${x.version}</small></label>`).join("");
   document.querySelectorAll("[data-layer]").forEach((control) => control.onchange = () => { data.layers.find((x) => String(x.id) === control.dataset.layer).visible = control.checked; renderMap(); });
-  $("#missionList").innerHTML = data.missions.map((x) => `<article class="mission-item"><div class="mission-icon">${x.status === "running" ? "▶" : "○"}</div><div class="mission-main"><div class="mission-title">${x.name}</div><div class="mission-meta">${x.vehicle_id} · ${x.route_name} · ${x.planned_altitude}m</div></div><div class="mission-actions"><button data-detail="${x.id}">详情</button><button data-check="${x.id}">检查</button><button data-plan="${x.id}">航线</button><button data-flight="${x.id}">启动飞行</button><button class="event" data-event="${x.id}">注入告警</button><span class="state state-${x.status}">${x.status_label}</span></div></article>`).join("");
+  const writeControls = ["admin", "dispatcher"].includes(currentRole) ? `<button data-check="${"${x.id}"}">检查</button><button data-plan="${"${x.id}"}">航线</button><button data-flight="${"${x.id}"}">启动飞行</button><button class="event" data-event="${"${x.id}"}">注入告警</button>` : "";
+  $("#missionList").innerHTML = data.missions.map((x) => `<article class="mission-item"><div class="mission-icon">${x.status === "running" ? "▶" : "○"}</div><div class="mission-main"><div class="mission-title">${x.name}</div><div class="mission-meta">${x.vehicle_id} · ${x.route_name} · ${x.planned_altitude}m</div></div><div class="mission-actions"><button data-detail="${x.id}">详情</button>${writeControls.replaceAll("${x.id}", x.id)}<span class="state state-${x.status}">${x.status_label}</span></div></article>`).join("");
   $("#ruleList").innerHTML = data.rules.map((x) => `<div class="rule-item"><span class="rule-code">${x.code}</span><span>${x.name}</span><span class="rule-level ${x.level}">${x.level_label}</span></div>`).join("");
   $("#vehicleList").innerHTML = data.vehicles.map((x) => `<div class="vehicle-item"><div><strong>${x.name}</strong><span>${x.model} · ${x.longitude.toFixed(3)}, ${x.latitude.toFixed(3)} · ${x.altitude}m</span></div><div class="vehicle-health"><span class="health-bar"><i style="width:${x.battery}%"></i></span><span>${x.battery}%</span></div></div>`).join("");
   $("#vehicleSelect").innerHTML = data.vehicles.map((x) => `<option value="${x.id}">${x.name}（${x.id}）</option>`).join("");
@@ -132,5 +134,6 @@ $("#missionForm").onsubmit = async (event) => {
   $("#health").textContent = `● 任务 ${result.id} 已保存并写入审计日志`;
 };
 
-$("#loginForm").onsubmit = async (event) => { event.preventDefault(); const response = await fetch("/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(Object.fromEntries(new FormData(event.currentTarget))) }); const result = await response.json(); if (!response.ok) { $("#loginMessage").textContent = result.message; return; } localStorage.setItem("lp_token", result.token); $("#loginGate").style.display = "none"; bootstrap(); };
+$("#loginForm").onsubmit = async (event) => { event.preventDefault(); const response = await fetch("/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(Object.fromEntries(new FormData(event.currentTarget))) }); const result = await response.json(); if (!response.ok) { $("#loginMessage").textContent = result.message; return; } localStorage.setItem("lp_token", result.token); currentRole = result.role; $("#currentUser").textContent = `${result.username} · ${result.role}`; $("#logoutButton").hidden = false; $("#loginGate").style.display = "none"; bootstrap(); };
+$("#logoutButton").onclick = async () => { await apiFetch("/api/auth/logout", { method: "POST" }); localStorage.removeItem("lp_token"); $("#loginGate").style.display = "grid"; $("#logoutButton").hidden = true; };
 bootstrap().catch((error) => { if (error.message.includes("401")) $("#loginGate").style.display = "grid"; $("#health").textContent = `● 服务不可用 · ${error.message}`; });
