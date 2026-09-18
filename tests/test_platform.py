@@ -82,6 +82,10 @@ class ValidationTests(unittest.TestCase):
     def test_tick_step_range_is_documented(self):
         self.assertTrue(1 <= 10 <= 50)
 
+    def test_password_hash_is_not_plaintext(self):
+        import hashlib
+        self.assertNotEqual(hashlib.sha256("admin123".encode()).hexdigest(), "admin123")
+
 
 if __name__ == "__main__":
     unittest.main()

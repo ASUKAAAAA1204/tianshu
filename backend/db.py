@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import hashlib
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -100,6 +101,14 @@ CREATE TABLE IF NOT EXISTS events (
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     resolved_at TEXT
 );
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    role TEXT NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 """
 
 
@@ -132,6 +141,8 @@ def init_db(path: Path = DEFAULT_DB, reset: bool = False) -> None:
         db.executescript(SCHEMA)
         if db.execute("SELECT COUNT(*) FROM vehicles").fetchone()[0] == 0:
             seed(db)
+        if db.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 0:
+            db.execute("INSERT INTO users(username,password_hash,role) VALUES(?,?,?)", ("admin", hashlib.sha256("admin123".encode()).hexdigest(), "admin"))
         db.commit()
     finally:
         db.close()

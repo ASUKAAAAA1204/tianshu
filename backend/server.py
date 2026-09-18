@@ -6,6 +6,8 @@ import os
 import re
 import sqlite3
 import math
+import hashlib
+import secrets
 from datetime import datetime, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -18,6 +20,8 @@ from db import init_db, rows, session
 ROOT = Path(__file__).resolve().parents[1]
 FRONTEND = ROOT / "frontend"
 MISSION_ID = re.compile(r"^[A-Z0-9-]{4,40}$")
+TOKENS = {}
+DEMO_MODE = os.environ.get("DEMO_MODE", "true").lower() == "true"
 
 
 class ApiError(Exception):
@@ -49,6 +53,16 @@ class Handler(BaseHTTPRequestHandler):
         except (ValueError, UnicodeDecodeError, json.JSONDecodeError):
             raise ApiError(400, "INVALID_JSON", "请求体必须是有效的 JSON")
 
+    def _user(self, required=False):
+        if DEMO_MODE and not required:
+            return {"username": "demo", "role": "admin"}
+        header = self.headers.get("Authorization", "")
+        token = header[7:] if header.startswith("Bearer ") else ""
+        user = TOKENS.get(token)
+        if not user:
+            raise ApiError(401, "UNAUTHORIZED", "请先登录")
+        return user
+
     def _file(self, path: Path):
         try:
             resolved = path.resolve()
@@ -70,6 +84,8 @@ class Handler(BaseHTTPRequestHandler):
             if route == "/api/health":
                 self._json({"status": "ok", "service": "liangping-low-altitude-base", "version": "0.2.0"})
                 return
+            if route == "/api/auth/me":
+                self._json(self._user(required=True)); return
             if route == "/api/demo/status":
                 with session() as db:
                     self._json({"layers": db.execute("SELECT COUNT(*) FROM layers").fetchone()[0], "missions": db.execute("SELECT COUNT(*) FROM missions").fetchone()[0], "audit_logs": db.execute("SELECT COUNT(*) FROM audit_logs").fetchone()[0]})
@@ -120,6 +136,14 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):  # noqa: N802
         try:
             route = urlparse(self.path).path
+            if route == "/api/auth/login":
+                payload = self._body(); username, password = payload.get("username", ""), payload.get("password", "")
+                with session() as db:
+                    user = db.execute("SELECT username,role,password_hash FROM users WHERE username=? AND enabled=1", (username,)).fetchone()
+                if not user or hashlib.sha256(password.encode()).hexdigest() != user["password_hash"]:
+                    raise ApiError(401, "INVALID_CREDENTIALS", "用户名或密码错误")
+                token = secrets.token_urlsafe(32); TOKENS[token] = {"username": user["username"], "role": user["role"]}
+                self._json({"token": token, "username": user["username"], "role": user["role"]}); return
             if route == "/api/demo/reset":
                 init_db(reset=True)
                 self._json({"status":"reset","message":"演示数据已重置"})
