@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
-from db import connect, database_capabilities, init_db, session  # noqa: E402
+from db import connect, database_capabilities, database_config, init_db, session  # noqa: E402
 from server import ApiError, validate_mission, Handler  # noqa: E402
 
 
@@ -49,6 +49,17 @@ class DatabaseTests(unittest.TestCase):
 
     def test_database_capabilities_report_sqlite(self):
         self.assertEqual(database_capabilities()["backend"], "sqlite")
+
+    def test_database_config_contract(self):
+        self.assertEqual(database_config("sqlite:///tmp/demo.db")["driver"], "sqlite3")
+        pg = database_config("postgresql://user:pass@localhost:5432/demo")
+        self.assertEqual(pg["backend"], "postgresql")
+        self.assertIn("ready", pg)
+
+    def test_unknown_database_scheme_is_not_ready(self):
+        config = database_config("oracle://localhost/demo")
+        self.assertFalse(config["ready"])
+        self.assertEqual(config["backend"], "unknown")
 
 
 class ValidationTests(unittest.TestCase):

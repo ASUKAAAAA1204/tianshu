@@ -4,6 +4,7 @@ import json
 import sqlite3
 import hashlib
 import os
+from urllib.parse import urlparse
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -137,13 +138,28 @@ def connect(path: Path = DEFAULT_DB) -> sqlite3.Connection:
     return connection
 
 
+def database_config(url: str = DATABASE_URL) -> dict:
+    parsed = urlparse(url)
+    if parsed.scheme in ("sqlite", ""):
+        return {"backend": "sqlite", "url": url, "ready": True, "driver": "sqlite3"}
+    if parsed.scheme in ("postgres", "postgresql"):
+        try:
+            import psycopg  # type: ignore
+        except ImportError:
+            return {"backend": "postgresql", "url": url, "ready": False, "driver": None, "reason": "psycopg未安装"}
+        return {"backend": "postgresql", "url": url, "ready": True, "driver": "psycopg"}
+    return {"backend": "unknown", "url": url, "ready": False, "driver": None, "reason": "不支持的数据库协议"}
+
+
 def database_capabilities() -> dict:
-    backend = "postgresql" if DATABASE_URL.startswith(("postgresql://", "postgres://")) else "sqlite"
+    config = database_config()
+    backend = config["backend"]
     return {
         "backend": backend,
-        "spatial_engine": "postgis" if backend == "postgresql" else "polygon_python",
-        "configured": backend == "sqlite",
-        "message": "SQLite离线模式已启用，使用严格Polygon计算" if backend == "sqlite" else "PostgreSQL连接已配置，驱动适配将在下一阶段启用",
+        "spatial_engine": "postgis" if backend == "postgresql" and config["ready"] else "polygon_python",
+        "configured": config["ready"],
+        "driver": config["driver"],
+        "message": "SQLite离线模式已启用，使用严格Polygon计算" if backend == "sqlite" else ("PostgreSQL驱动已就绪，连接尚未执行" if config["ready"] else config.get("reason", "数据库未就绪")),
     }
 
 
