@@ -27,13 +27,15 @@ function render(data) {
   renderMap();
   $("#layerList").innerHTML = data.layers.map((x) => `<label class="layer-row"><input type="checkbox" ${x.visible && x.status === "published" ? "checked" : ""} ${x.status !== "published" ? "disabled" : ""} data-layer="${x.id}"><span class="layer-swatch ${x.layer_type}"></span><span>${x.name}</span><small>${x.status} · v${x.version}</small></label>`).join("");
   document.querySelectorAll("[data-layer]").forEach((control) => control.onchange = () => { data.layers.find((x) => String(x.id) === control.dataset.layer).visible = control.checked; renderMap(); });
-  $("#missionList").innerHTML = data.missions.map((x) => `<article class="mission-item"><div class="mission-icon">${x.status === "running" ? "▶" : "○"}</div><div class="mission-main"><div class="mission-title">${x.name}</div><div class="mission-meta">${x.vehicle_id} · ${x.route_name} · ${x.planned_altitude}m</div></div><div class="mission-actions"><button data-detail="${x.id}">详情</button><button data-check="${x.id}">检查</button><button data-plan="${x.id}">航线</button><span class="state state-${x.status}">${x.status_label}</span></div></article>`).join("");
+  $("#missionList").innerHTML = data.missions.map((x) => `<article class="mission-item"><div class="mission-icon">${x.status === "running" ? "▶" : "○"}</div><div class="mission-main"><div class="mission-title">${x.name}</div><div class="mission-meta">${x.vehicle_id} · ${x.route_name} · ${x.planned_altitude}m</div></div><div class="mission-actions"><button data-detail="${x.id}">详情</button><button data-check="${x.id}">检查</button><button data-plan="${x.id}">航线</button><button data-flight="${x.id}">启动飞行</button><button class="event" data-event="${x.id}">注入告警</button><span class="state state-${x.status}">${x.status_label}</span></div></article>`).join("");
   $("#ruleList").innerHTML = data.rules.map((x) => `<div class="rule-item"><span class="rule-code">${x.code}</span><span>${x.name}</span><span class="rule-level ${x.level}">${x.level_label}</span></div>`).join("");
   $("#vehicleList").innerHTML = data.vehicles.map((x) => `<div class="vehicle-item"><div><strong>${x.name}</strong><span>${x.model} · ${x.longitude.toFixed(3)}, ${x.latitude.toFixed(3)} · ${x.altitude}m</span></div><div class="vehicle-health"><span class="health-bar"><i style="width:${x.battery}%"></i></span><span>${x.battery}%</span></div></div>`).join("");
   $("#vehicleSelect").innerHTML = data.vehicles.map((x) => `<option value="${x.id}">${x.name}（${x.id}）</option>`).join("");
   document.querySelectorAll("[data-detail]").forEach((b) => b.onclick = () => showDetails(b.dataset.detail));
   document.querySelectorAll("[data-check]").forEach((b) => b.onclick = () => runAction(b.dataset.check, "check"));
   document.querySelectorAll("[data-plan]").forEach((b) => b.onclick = () => runAction(b.dataset.plan, "routes/plan"));
+  document.querySelectorAll("[data-flight]").forEach((b) => b.onclick = () => startFlight(b.dataset.flight));
+  document.querySelectorAll("[data-event]").forEach((b) => b.onclick = () => injectEvent(b.dataset.event));
 }
 
 function showError(result) {
@@ -49,6 +51,7 @@ async function showDetails(id) {
   const route = mission.routes[0];
   $("#resultBadge").textContent = mission.status_label;
   $("#resultContent").innerHTML = `<div class="detail-grid"><span>任务编号</span><strong>${mission.id}</strong><span>飞行器</span><strong>${mission.vehicle_id}</strong><span>起终点</span><strong>${mission.start_lng}, ${mission.start_lat} → ${mission.end_lng}, ${mission.end_lat}</strong><span>计划高度</span><strong>${mission.planned_altitude} 米</strong><span>最近检查</span><strong>${check ? `${check.decision} / ${check.risk_level}` : "尚未检查"}</strong><span>候选航线</span><strong>${route ? `${route.name} / ${route.distance_m.toFixed(1)} 米` : "尚未生成"}</strong></div>`;
+  loadEvents(id);
 }
 
 async function runAction(id, action) {
@@ -64,6 +67,33 @@ async function runAction(id, action) {
     $("#resultBadge").textContent = "航线已生成";
     $("#resultContent").innerHTML = `<div class="route-result"><strong>${result.name}</strong><span>距离 ${result.distance_m} 米 · 预计 ${result.duration_s} 秒</span><span>风险等级：${result.risk_level}</span></div>`;
   }
+}
+
+async function startFlight(id) {
+  const response = await fetch(`/api/missions/${id}/flight/start`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+  const result = await response.json();
+  if (!response.ok) return showError(result);
+  $("#resultBadge").textContent = "飞行中";
+  $("#resultContent").innerHTML = `<div class="flight-status">任务 ${id} 已启动模拟飞行 · 链路在线 · 电量 ${result.telemetry.battery}%</div>`;
+}
+
+async function injectEvent(id) {
+  const type = window.prompt("输入事件类型：deviation / low_battery / link_loss / temporary_restriction", "low_battery");
+  if (!type) return;
+  const response = await fetch(`/api/missions/${id}/events`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ event_type: type }) });
+  const result = await response.json();
+  if (!response.ok) return showError(result);
+  $("#resultBadge").textContent = "有新告警";
+  $("#resultContent").innerHTML = `<div class="result-block ${result.severity === "critical" ? "hard" : "soft"}"><strong>${result.event_type}</strong><span>${result.message}</span><small>${result.severity}</small></div>`;
+  loadEvents(id);
+}
+
+async function loadEvents(id) {
+  const response = await fetch(`/api/missions/${id}/events`);
+  if (!response.ok) return;
+  const events = await response.json();
+  $("#eventList").innerHTML = events.length ? events.map((event) => `<div class="event-row ${event.severity === "critical" ? "severity-critical" : "severity-warning"}"><strong>${event.event_type}</strong><span>${event.message}</span><small>${event.status}</small>${event.status === "open" ? `<button data-resolve="${event.id}">标记已处置</button>` : ""}</div>`).join("") : "";
+  document.querySelectorAll("[data-resolve]").forEach((button) => button.onclick = async () => { await fetch(`/api/events/${button.dataset.resolve}/resolve`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }); loadEvents(id); });
 }
 
 async function bootstrap() {
