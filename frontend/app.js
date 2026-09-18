@@ -1,6 +1,7 @@
 const $ = (selector) => document.querySelector(selector);
 let platformData = null;
 let selectedRoute = null;
+const apiFetch = (url, options = {}) => { options.headers = { ...(options.headers || {}), ...(localStorage.getItem("lp_token") ? { Authorization: `Bearer ${localStorage.getItem("lp_token")}` } : {}) }; return fetch(url, options); };
 
 const project = ([lng, lat]) => [((lng - 107.70) / 0.16) * 100, ((30.75 - lat) / 0.15) * 100];
 const metric = (label, value, unit, tone = "") => `<div class="metric"><div class="metric-label">${label}</div><div class="metric-value ${tone}">${value}<small>${unit}</small></div></div>`;
@@ -44,7 +45,7 @@ function showError(result) {
 }
 
 async function showDetails(id) {
-  const response = await fetch(`/api/missions/${id}`);
+  const response = await apiFetch(`/api/missions/${id}`);
   const mission = await response.json();
   if (!response.ok) return showError(mission);
   const check = mission.checks[0];
@@ -55,7 +56,7 @@ async function showDetails(id) {
 }
 
 async function runAction(id, action) {
-  const response = await fetch(`/api/missions/${id}/${action}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+  const response = await apiFetch(`/api/missions/${id}/${action}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
   const result = await response.json();
   if (!response.ok) return showError(result);
   if (action === "check") {
@@ -70,7 +71,7 @@ async function runAction(id, action) {
 }
 
 async function startFlight(id) {
-  const response = await fetch(`/api/missions/${id}/flight/start`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+  const response = await apiFetch(`/api/missions/${id}/flight/start`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
   const result = await response.json();
   if (!response.ok) return showError(result);
   $("#resultBadge").textContent = "飞行中";
@@ -82,7 +83,7 @@ function bindTick(id) {
   const button = $("[data-tick]");
   if (!button) return;
   button.onclick = async () => {
-    const response = await fetch(`/api/missions/${id}/flight/tick`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ step: 10 }) });
+    const response = await apiFetch(`/api/missions/${id}/flight/tick`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ step: 10 }) });
     const result = await response.json();
     if (!response.ok) return showError(result);
     $("#resultBadge").textContent = `${result.status} · ${result.progress}%`;
@@ -94,7 +95,7 @@ function bindTick(id) {
 async function injectEvent(id) {
   const type = window.prompt("输入事件类型：deviation / low_battery / link_loss / temporary_restriction", "low_battery");
   if (!type) return;
-  const response = await fetch(`/api/missions/${id}/events`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ event_type: type }) });
+  const response = await apiFetch(`/api/missions/${id}/events`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ event_type: type }) });
   const result = await response.json();
   if (!response.ok) return showError(result);
   $("#resultBadge").textContent = "有新告警";
@@ -103,15 +104,16 @@ async function injectEvent(id) {
 }
 
 async function loadEvents(id) {
-  const response = await fetch(`/api/missions/${id}/events`);
+  const response = await apiFetch(`/api/missions/${id}/events`);
   if (!response.ok) return;
   const events = await response.json();
   $("#eventList").innerHTML = events.length ? events.map((event) => `<div class="event-row ${event.severity === "critical" ? "severity-critical" : "severity-warning"}"><strong>${event.event_type}</strong><span>${event.message}</span><small>${event.status}</small>${event.status === "open" ? `<button data-resolve="${event.id}">标记已处置</button>` : ""}</div>`).join("") : "";
-  document.querySelectorAll("[data-resolve]").forEach((button) => button.onclick = async () => { await fetch(`/api/events/${button.dataset.resolve}/resolve`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }); loadEvents(id); });
+  document.querySelectorAll("[data-resolve]").forEach((button) => button.onclick = async () => { await apiFetch(`/api/events/${button.dataset.resolve}/resolve`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }); loadEvents(id); });
 }
 
 async function bootstrap() {
-  const response = await fetch("/api/bootstrap");
+  const response = await apiFetch("/api/bootstrap");
+  if (response.status === 401) throw new Error("401 未登录");
   if (!response.ok) throw new Error("初始化数据加载失败");
   render(await response.json());
   $("#health").textContent = "● 服务正常 · SQLite 数据已加载";
@@ -123,11 +125,12 @@ $("#closeDialog").onclick = () => dialog.close();
 $("#cancelDialog").onclick = () => dialog.close();
 $("#missionForm").onsubmit = async (event) => {
   event.preventDefault();
-  const response = await fetch("/api/missions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(Object.fromEntries(new FormData(event.currentTarget))) });
+  const response = await apiFetch("/api/missions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(Object.fromEntries(new FormData(event.currentTarget))) });
   const result = await response.json();
   if (!response.ok) { $("#formMessage").textContent = result.message; return; }
   platformData.missions.unshift(result); render(platformData); dialog.close();
   $("#health").textContent = `● 任务 ${result.id} 已保存并写入审计日志`;
 };
 
-bootstrap().catch((error) => { $("#health").textContent = `● 服务不可用 · ${error.message}`; });
+$("#loginForm").onsubmit = async (event) => { event.preventDefault(); const response = await fetch("/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(Object.fromEntries(new FormData(event.currentTarget))) }); const result = await response.json(); if (!response.ok) { $("#loginMessage").textContent = result.message; return; } localStorage.setItem("lp_token", result.token); $("#loginGate").style.display = "none"; bootstrap(); };
+bootstrap().catch((error) => { if (error.message.includes("401")) $("#loginGate").style.display = "grid"; $("#health").textContent = `● 服务不可用 · ${error.message}`; });
