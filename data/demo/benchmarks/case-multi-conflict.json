@@ -1,0 +1,32 @@
+{
+  "case_id": "multi-conflict",
+  "scenario_code": "INFRASTRUCTURE_PATROL",
+  "name": "基础设施巡查-多任务冲突",
+  "missions": [
+    {
+      "name": "基础设施巡查-冲突基准A",
+      "vehicle_id": "UAV-LP-001",
+      "route_name": "R-BENCH-CONFLICT-A",
+      "start_lng": 107.745,
+      "start_lat": 30.638,
+      "end_lng": 107.780,
+      "end_lat": 30.657,
+      "planned_altitude": 120,
+      "time_window_start": "2026-09-18T10:00:00+00:00",
+      "time_window_end": "2026-09-18T10:30:00+00:00"
+    },
+    {
+      "name": "基础设施巡查-冲突基准B",
+      "vehicle_id": "UAV-LP-001",
+      "route_name": "R-BENCH-CONFLICT-B",
+      "start_lng": 107.750,
+      "start_lat": 30.640,
+      "end_lng": 107.785,
+      "end_lat": 30.659,
+      "planned_altitude": 120,
+      "time_window_start": "2026-09-18T10:10:00+00:00",
+      "time_window_end": "2026-09-18T10:40:00+00:00"
+    }
+  ],
+  "expected": "second mission check returns a hard same-vehicle time conflict"
+}

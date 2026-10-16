@@ -3,3 +3,4 @@ CREATE INDEX IF NOT EXISTS idx_layers_status_version ON layers (status, version)
 CREATE INDEX IF NOT EXISTS idx_missions_created_at ON missions (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_events_mission_status ON events (mission_id, status);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_route_replans_mission_status ON route_replans (mission_id, status);

@@ -1,0 +1,16 @@
+{
+  "case_id": "hard-zone",
+  "scenario_code": "INFRASTRUCTURE_PATROL",
+  "name": "基础设施巡查-硬限制区",
+  "mission": {
+    "name": "基础设施巡查-硬限制区",
+    "vehicle_id": "UAV-LP-001",
+    "route_name": "R-BENCH-HARD-01",
+    "start_lng": 107.760,
+    "start_lat": 30.660,
+    "end_lng": 107.820,
+    "end_lat": 30.700,
+    "planned_altitude": 120
+  },
+  "expected": "check identifies a hard restriction and route planning returns a feasible corridor"
+}

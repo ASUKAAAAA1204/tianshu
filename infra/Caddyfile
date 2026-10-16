@@ -1,0 +1,21 @@
+{
+  auto_https off
+}
+
+:8443 {
+  encode gzip
+  log {
+    output file logs/access.log {
+      roll_size 50MiB
+      roll_keep 10
+      roll_keep_for 168h
+    }
+  }
+  header {
+    Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    X-Content-Type-Options "nosniff"
+    X-Frame-Options "DENY"
+    Referrer-Policy "no-referrer"
+  }
+  reverse_proxy 127.0.0.1:8765
+}

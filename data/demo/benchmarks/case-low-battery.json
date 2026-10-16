@@ -1,0 +1,16 @@
+{
+  "case_id": "low-battery",
+  "scenario_code": "INFRASTRUCTURE_PATROL",
+  "name": "基础设施巡查-低电量重规划",
+  "mission": {
+    "name": "基础设施巡查-低电量重规划",
+    "vehicle_id": "UAV-LP-002",
+    "route_name": "R-BENCH-BATTERY-01",
+    "start_lng": 107.725,
+    "start_lat": 30.704,
+    "end_lng": 107.755,
+    "end_lat": 30.725,
+    "planned_altitude": 220
+  },
+  "expected": "low-battery event creates an actionable replan candidate pending human confirmation"
+}

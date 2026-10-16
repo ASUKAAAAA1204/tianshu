@@ -1,0 +1,11 @@
+{
+  "name": "liangping-low-altitude-platform",
+  "private": true,
+  "version": "0.6.1",
+  "scripts": {
+    "test:e2e": "playwright test --config=playwright.map.config.cjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1"
+  }
+}

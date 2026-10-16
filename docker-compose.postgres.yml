@@ -6,7 +6,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-liangping}
       POSTGRES_USER: ${POSTGRES_USER:-liangping}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-before-production}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set explicitly}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:

@@ -51,6 +51,8 @@ CREATE TABLE IF NOT EXISTS missions (
     end_lng DOUBLE PRECISION NOT NULL,
     end_lat DOUBLE PRECISION NOT NULL,
     planned_altitude DOUBLE PRECISION NOT NULL,
+    time_window_start TIMESTAMPTZ,
+    time_window_end TIMESTAMPTZ,
     status TEXT NOT NULL,
     status_label TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -108,6 +110,18 @@ CREATE TABLE IF NOT EXISTS events (
     resolved_at TIMESTAMPTZ
 );
 
+CREATE TABLE IF NOT EXISTS route_replans (
+    id BIGSERIAL PRIMARY KEY,
+    mission_id TEXT NOT NULL REFERENCES missions(id),
+    event_id BIGINT REFERENCES events(id),
+    route_id BIGINT NOT NULL REFERENCES routes(id),
+    reason TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'proposed' CHECK (status IN ('proposed','confirmed','rejected')),
+    actor_username TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    confirmed_at TIMESTAMPTZ
+);
+
 CREATE TABLE IF NOT EXISTS users (
     id BIGSERIAL PRIMARY KEY,
     username TEXT UNIQUE NOT NULL,
@@ -117,4 +131,14 @@ CREATE TABLE IF NOT EXISTS users (
     failed_attempts INTEGER NOT NULL DEFAULT 0,
     locked_until DOUBLE PRECISION NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS sessions (
+    id BIGSERIAL PRIMARY KEY,
+    token_hash TEXT UNIQUE NOT NULL,
+    username TEXT NOT NULL REFERENCES users(username),
+    expires_at DOUBLE PRECISION NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_seen_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    ip_address INET,
+    user_agent TEXT
 );

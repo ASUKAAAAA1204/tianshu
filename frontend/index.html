@@ -3,14 +3,16 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <title>梁平数字空域 · 运行基础底座</title>
     <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
     <style>.layer-panel{margin-top:14px;border-top:1px solid #26364d;padding-top:12px}.subhead{font-size:11px;color:#8295af;margin-bottom:8px}.layer-row{display:flex;align-items:center;gap:7px;font-size:11px;color:#a8b8cc;padding:5px 0}.layer-row small{margin-left:auto;color:#71839d}.layer-swatch{width:8px;height:8px;border-radius:2px}.layer-swatch.operable{background:#3f8fd3}.layer-swatch.restricted{background:#d89b52}.result-panel{margin-top:18px}.result-empty{color:#71839d;font-size:12px;padding:14px 0}.result-summary,.result-block,.route-result{padding:11px 13px;margin-bottom:8px;background:#111e30;border:1px solid #263b52;display:flex;gap:12px;align-items:center;font-size:12px}.result-summary.pass{color:#70e0b2;border-color:#27745b}.result-summary.warning,.result-block.soft{color:#ffca82;border-color:#80602b}.result-summary.blocked,.result-block.hard{color:#ff9b91;border-color:#793d39}.result-block{justify-content:flex-start}.result-block small{margin-left:auto;color:#8194aa}.route-result{flex-direction:column;align-items:flex-start;color:#a8c7e5}</style>
-    <style>.mission-actions{display:flex;align-items:center;gap:5px;flex-wrap:wrap}.mission-actions button{font-size:10px;color:#a9c9e9;background:#162e48;border:1px solid #315275;border-radius:2px;padding:3px 6px;cursor:pointer}.mission-actions button.event{color:#ffc27a;border-color:#80602b}.mission-actions .state{margin-left:3px}.detail-grid{display:grid;grid-template-columns:100px 1fr;gap:10px;padding:12px;background:#111e30;font-size:12px}.detail-grid span{color:#7f91a9}.geo-route.selected{stroke:#6be2be;stroke-width:1.2;fill:none;stroke-dasharray:2 1}.event-list{margin-top:12px}.event-row{display:flex;align-items:center;gap:10px;padding:9px 11px;margin-bottom:7px;background:#111e30;border:1px solid #263b52;font-size:12px}.event-row small{color:#8295af}.event-row button{margin-left:auto;font-size:10px;color:#b9d5ed;background:#172f48;border:1px solid #315275;padding:3px 7px;border-radius:2px}.severity-critical{color:#ff958b;border-color:#793d39}.severity-warning{color:#ffca82;border-color:#80602b}.flight-status{padding:9px 11px;background:#102d2a;border:1px solid #27745b;color:#70e0b2;font-size:12px}</style>
+    <style>.mission-actions{display:flex;align-items:center;gap:5px;flex-wrap:wrap}.mission-actions button{font-size:10px;color:#a9c9e9;background:#162e48;border:1px solid #315275;border-radius:2px;padding:3px 6px;cursor:pointer}.mission-actions button.event{color:#ffc27a;border-color:#80602b}.mission-actions .state{margin-left:3px}.detail-grid{display:grid;grid-template-columns:100px 1fr;gap:10px;padding:12px;background:#111e30;font-size:12px}.detail-grid span{color:#7f91a9}.geo-route.selected{stroke:#6be2be;stroke-width:1.2;fill:none;stroke-dasharray:2 1}.event-list{margin-top:12px}.event-row{display:flex;align-items:center;gap:10px;padding:9px 11px;margin-bottom:7px;background:#111e30;border:1px solid #263b52;font-size:12px}.event-row small{color:#8295af}.event-row button{margin-left:auto;font-size:10px;color:#b9d5ed;background:#172f48;border:1px solid #315275;padding:3px 7px;border-radius:2px}.severity-critical{color:#ff958b;border-color:#793d39}.severity-warning{color:#ffca82;border-color:#80602b}.flight-status{padding:9px 11px;background:#102d2a;border:1px solid #27745b;color:#70e0b2;font-size:12px}.timeline-list{margin-top:8px}.timeline-row{display:grid;grid-template-columns:120px 1fr auto;gap:10px;padding:7px 10px;margin-bottom:4px;background:#0f1b2b;border-left:2px solid #386180;font-size:11px}.timeline-row span{color:#a9bfd6}.timeline-row small{color:#71839d}</style>
     <style>.login-gate{position:fixed;inset:0;z-index:20;display:none;place-items:center;background:rgba(7,12,20,.96)}.login-gate form{width:320px;padding:26px;background:#101a29;border:1px solid #334863}.login-gate input{display:block;width:100%;margin:10px 0;padding:10px;background:#0b1421;color:#fff;border:1px solid #33465f}.login-gate p{color:#8295af;font-size:12px}.login-gate #loginMessage{color:#ff9b91;font-size:12px;margin-top:8px}.logout-button{margin-left:10px;color:#b8cbe0;background:#17283c;border:1px solid #38506b;border-radius:3px;padding:3px 8px;font-size:11px;cursor:pointer}</style>
   </head>
   <body>
-    <div id="loginGate" class="login-gate"><form id="loginForm"><h2>平台登录</h2><p>生产模式需要身份认证</p><input name="username" value="admin" placeholder="用户名" required><input name="password" type="password" value="admin123" placeholder="密码" required><button class="primary" type="submit">登录</button><div id="loginMessage"></div></form></div>
+    <div id="loginGate" class="login-gate"><form id="loginForm"><h2>平台登录</h2><p>生产模式需要身份认证</p><input name="username" value="admin" placeholder="用户名" autocomplete="username" required><input name="password" type="password" value="admin123" placeholder="密码" autocomplete="current-password" required><button class="primary" type="submit">登录</button><div id="loginMessage"></div></form></div>
     <header class="topbar">
       <div>
         <div class="eyebrow">LIANGPING LOW-ALTITUDE OPERATIONS</div>
@@ -19,27 +21,48 @@
       <div class="topbar-meta"><span class="status-dot"></span> <span id="currentUser">演示环境 · 离线可用</span> <button id="logoutButton" class="logout-button" hidden>退出登录</button></div>
     </header>
     <main class="shell">
-      <section class="metrics" id="metrics"></section>
-      <section class="workspace">
-        <div class="panel map-panel">
-          <div class="panel-head"><div><span class="section-kicker">01 / 空域态势</span><h2>四维空域运行视图</h2></div><span class="badge badge-green">数据正常</span></div>
-          <div class="map-canvas" id="mapCanvas" aria-label="空域示意图"></div>
-          <div class="legend"><span><i class="legend-box blue"></i>可运行空域</span><span><i class="legend-box amber"></i>限制区</span><span><i class="legend-box red"></i>冲突预警</span></div>
-          <div class="layer-panel"><div class="subhead">图层控制</div><div id="layerList"></div></div>
-        </div>
-        <div class="panel mission-panel">
-          <div class="panel-head"><div><span class="section-kicker">02 / 运行任务</span><h2>任务与航线</h2></div><button class="primary" id="newMission">新建任务</button></div>
+      <section class="metrics metrics-compact" id="metrics" aria-label="运行摘要"></section>
+      <section class="workspace map-workspace" aria-label="低空运行地图工作区">
+        <aside class="panel map-sidebar" aria-label="地图图层与筛选">
+          <div class="panel-head"><div><span class="section-kicker">图层与筛选</span><h2>地图内容</h2></div></div>
+          <div class="layer-panel"><div class="subhead">显示图层</div><div id="layerList"></div></div>
+          <div class="layer-panel"><label class="altitude-control">飞行高度<select id="altitudeFilter"><option value="all">全部高度</option><option value="0-60">0–60 m</option><option value="60-120">60–120 m</option><option value="120-300">120–300 m</option><option value="300+">300 m+</option></select></label><div id="altitudeLayerReadout" class="altitude-layer-readout" aria-live="polite">当前高度层：全部高度</div></div>
+          <div class="layer-panel map-nav-tools"><div class="subhead">地图导航</div><div class="map-zoom"><button type="button" id="mapZoomOut" aria-label="缩小地图">−</button><button type="button" id="mapZoomIn" aria-label="放大地图">＋</button><button type="button" id="mapReset" aria-label="重置地图视图">复位</button></div></div>
+          <section class="route-waypoint-panel" aria-label="航线参考设施点"><div class="route-waypoint-heading"><strong>航线参考点</strong><small>选任务附近设施作为参考航点，不代表起降许可</small></div><div id="routeWaypointList" class="route-waypoint-list"><span class="route-waypoint-empty">地图缩放至 12 级以上后显示</span></div></section>
+          <div class="layer-panel"><div class="subhead">图例</div><div class="legend legend-vertical"><span><i class="legend-box route-primary-key"></i>主航线</span><span><i class="legend-box route-actual-key"></i>模拟轨迹</span><span><i class="legend-box control-zone-key"></i>临时管制范围</span><span><i class="legend-box reference-point-key"></i>合成参考点</span><span><i class="legend-box amber"></i>任务附近设施</span><span><i class="legend-box red"></i>合成危险点</span></div></div>
+          <div class="layer-panel"><div class="subhead">地理数据准入</div><div class="terrain-notice" id="terrainStatus">DEM：离线合成网格 · 仅用于演示指标</div><div class="data-register" id="dataRegister" aria-label="地理数据登记"></div></div>
+        </aside>
+        <section class="panel map-panel" aria-label="任务聚焦地图">
+          <div class="map-head"><div><span class="section-kicker">01 / 空域态势 · 公开参考 / 合成演示</span><h2>低空运行态势</h2><p id="mapMissionSummary">请选择任务以查看相关空间范围</p></div><span class="badge badge-blue">演示数据</span></div>
+          <div class="map-canvas" id="mapCanvas" aria-label="空域示意图"><span class="map-mode-status">等待地图加载</span></div>
+          <div id="mapObjectSummary" class="map-object-summary" aria-label="当前地图对象"></div>
+          <div class="map-foot"><span id="mapCoords">坐标 --</span><div class="track-replay" id="trackReplay" aria-label="轨迹回放">
+            <div class="track-replay-head"><strong>轨迹回放</strong><span id="trackReplayStatus">请选择任务</span></div>
+            <div class="track-replay-controls"><button type="button" id="trackReplayToggle" aria-label="播放轨迹回放" disabled>▶</button><input id="trackReplayRange" type="range" min="0" max="0" value="0" aria-label="轨迹时间点" disabled><output id="trackReplayTime">--</output></div>
+          </div><span class="map-data-boundary">公开参考 / 合成演示数据 · 不代表真实授权空域、真实飞行许可或权威测绘边界</span></div>
+          <section class="map-timeline" id="mapTimeline" aria-label="任务运行时间轴"><div class="timeline-head"><div><span class="subhead">运行时间轴</span><small>计划、管制、告警与数据时间分开表达</small></div><span class="timeline-boundary">合成演示时间 · Asia/Shanghai</span></div><div id="mapTimelineTrack" class="timeline-track"><div class="timeline-empty">正在加载时间上下文…</div></div></section>
+        </section>
+        <aside class="panel mission-panel" aria-label="任务与对象详情">
+          <div class="panel-head"><div><span class="section-kicker">02 / 当前运行</span><h2>任务与航线</h2></div><button class="primary" id="newMission">新建任务</button></div>
           <div id="missionList" class="mission-list"></div>
-        </div>
+          <div class="facility-summary"><div class="subhead">设施状态</div><div id="facilityList" class="facility-list"></div><button type="button" class="secondary-button" id="openFacilityManagement">设施管理</button></div>
+          <section class="result-panel"><div class="panel-head"><div><span class="section-kicker">03 / 处置与详情</span><h2>任务处置结果</h2></div><span id="resultBadge" class="badge">选择任务</span></div><div id="resultContent" class="result-empty" aria-live="polite">选择任务或地图对象查看详情。</div><div id="eventList" class="event-list"></div></section>
+        </aside>
       </section>
-      <section class="panel result-panel"><div class="panel-head"><div><span class="section-kicker">05 / 规则与航线结果</span><h2>任务处置结果</h2></div><span id="resultBadge" class="badge">等待操作</span></div><div id="resultContent" class="result-empty">选择任务后点击“检查”或“航线”，结果将在此处保留。</div><div id="eventList" class="event-list"></div></section>
       <section class="lower-grid">
         <div class="panel"><div class="panel-head"><div><span class="section-kicker">03 / 规则引擎</span><h2>当前生效规则</h2></div><span class="badge">规则优先</span></div><div id="ruleList" class="rule-list"></div></div>
         <div class="panel"><div class="panel-head"><div><span class="section-kicker">04 / 设施与飞行器</span><h2>资源状态</h2></div><span class="badge badge-blue">实时模拟</span></div><div id="vehicleList" class="vehicle-list"></div></div>
       </section>
-      <footer class="footer"><span id="health">正在检查服务...</span><span>版本 0.3.0 · Sprint 2</span></footer>
+      <footer class="footer"><span id="health">正在检查服务...</span><span>版本 0.6.0-recovered · 恢复基线</span></footer>
     </main>
-    <dialog id="missionDialog"><form id="missionForm"><div class="dialog-head"><h2>新建运行任务</h2><button type="button" id="closeDialog">×</button></div><div class="form-grid"><label>任务编号<input name="id" value="MS-20260915-004" required></label><label>任务名称<input name="name" value="新建基础运行任务" required></label><label>飞行器<select name="vehicle_id" id="vehicleSelect"></select></label><label>航线名称<input name="route_name" value="R-新建-01" required></label><label>起点经度<input name="start_lng" value="107.742" required></label><label>起点纬度<input name="start_lat" value="30.642" required></label><label>终点经度<input name="end_lng" value="107.792" required></label><label>终点纬度<input name="end_lat" value="30.659" required></label><label>计划高度（米）<input name="planned_altitude" type="number" min="20" max="1200" value="120" required></label></div><div id="formMessage" class="form-message"></div><div class="dialog-actions"><button type="button" id="cancelDialog">取消</button><button class="primary" type="submit">创建并保存</button></div></form></dialog>
-    <script src="/app.js" defer></script>
+    <dialog id="facilityManagementDialog" class="facility-dialog"><div class="dialog-head"><div><span class="section-kicker">设施主数据</span><h2>设施管理</h2></div><button type="button" id="closeFacilityManagement" aria-label="关闭设施管理">×</button></div><form id="facilityForm" class="facility-form"><input name="facility_id" placeholder="设施编号，如 FAC-005" required><input name="name" placeholder="设施名称" required><input name="facility_type" value="vertiport" placeholder="设施类型" required><div class="facility-coords"><input name="longitude" type="number" step="0.000001" placeholder="经度" required><input name="latitude" type="number" step="0.000001" placeholder="纬度" required></div><select name="status"><option value="active">服务正常</option><option value="maintenance">维护中</option><option value="disabled">已停用</option></select><button class="primary" type="submit">新增设施</button><div id="facilityFormMessage" class="form-message"></div></form><div id="facilityAdminList" class="facility-admin-list"></div></dialog>
+    <dialog id="missionDialog"><form id="missionForm"><div class="dialog-head"><h2>新建运行任务</h2><button type="button" id="closeDialog">×</button></div><div class="form-grid"><label>任务编号<input name="id" value="MS-20260915-004" required></label><label>任务名称<input name="name" value="新建基础运行任务" required></label><label>飞行器<select name="vehicle_id" id="vehicleSelect"></select></label><label>航线名称<input name="route_name" value="R-新建-01" required></label><label>起点经度<input name="start_lng" value="107.742" required></label><label>起点纬度<input name="start_lat" value="30.642" required></label><label>终点经度<input name="end_lng" value="107.792" required></label><label>终点纬度<input name="end_lat" value="30.659" required></label><label>计划高度（米）<input name="planned_altitude" type="number" min="20" max="1200" value="120" required></label><label>任务窗口开始<input name="time_window_start" type="datetime-local"></label><label>任务窗口结束<input name="time_window_end" type="datetime-local"></label></div><div id="formMessage" class="form-message"></div><div class="dialog-actions"><button type="button" id="cancelDialog">取消</button><button class="primary" type="submit">创建并保存</button></div></form></dialog>
+    <!-- These scripts are intentionally ordered and loaded synchronously: the map
+         adapters depend on the vendor global before app initialization. -->
+    <script src="/vendor/maplibre-gl.js"></script>
+    <script src="/map-controller.js?v=0.6.1"></script>
+    <script src="/adapters/maplibre-adapter.js?v=0.6.1"></script>
+    <script src="/adapters/map-adapter.js"></script>
+    <script src="/app.js"></script>
   </body>
 </html>

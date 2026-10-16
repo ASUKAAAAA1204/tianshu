@@ -1,0 +1,1394 @@
+{
+  "type": "FeatureCollection",
+  "metadata": {
+    "name": "梁平公开参考空间资产",
+    "generated_at": "2026-10-15",
+    "coordinate_reference": "WGS84",
+    "source_policy": "公开参考 / 合成演示数据",
+    "data_boundary": "不代表真实授权空域、真实飞行许可或权威测绘边界",
+    "synthetic_point_generation": {
+      "seed": 20261017,
+      "reference_points": 30,
+      "hazard_points": 24,
+      "distribution_bbox": [
+        107.7,
+        30.62,
+        107.82,
+        30.74
+      ],
+      "distribution_source": "loaded OpenStreetMap reference extract extent; not an authoritative administrative boundary",
+      "usage": "visualization-only synthetic points; do not use for flight authorization or safety decisions"
+    }
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "任务参考空域 A",
+        "asset_type": "airspace_cell",
+        "risk_level": "medium",
+        "min_altitude_m": 60,
+        "max_altitude_m": 300,
+        "source_kind": "synthetic_demo",
+        "visible_default": true
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              107.735,
+              30.628
+            ],
+            [
+              107.79,
+              30.628
+            ],
+            [
+              107.79,
+              30.67
+            ],
+            [
+              107.735,
+              30.67
+            ],
+            [
+              107.735,
+              30.628
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "临时管制参考区",
+        "asset_type": "restricted",
+        "risk_level": "high",
+        "min_altitude_m": 0,
+        "max_altitude_m": 200,
+        "valid_from": "2026-10-15T08:00:00+08:00",
+        "valid_to": "2026-10-15T18:00:00+08:00",
+        "source_kind": "synthetic_demo",
+        "visible_default": true
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              107.775,
+              30.668
+            ],
+            [
+              107.805,
+              30.668
+            ],
+            [
+              107.805,
+              30.692
+            ],
+            [
+              107.775,
+              30.692
+            ],
+            [
+              107.775,
+              30.668
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "低空运行服务中心",
+        "asset_type": "facility_point",
+        "facility_type": "operations_center",
+        "point_id": "FAC-LP-OPS-001",
+        "source_kind": "synthetic_demo",
+        "visible_default": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.758,
+          30.651
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "综合起降点-001",
+        "asset_type": "facility_point",
+        "facility_type": "takeoff_landing",
+        "point_id": "FAC-LP-TL-001",
+        "source_kind": "synthetic_demo",
+        "visible_default": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.748,
+          30.642
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "补能点-001",
+        "asset_type": "facility_point",
+        "facility_type": "charging",
+        "point_id": "FAC-LP-CHG-001",
+        "source_kind": "synthetic_demo",
+        "visible_default": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.792,
+          30.665
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "通信保障点-001",
+        "asset_type": "facility_point",
+        "facility_type": "communication",
+        "point_id": "FAC-LP-COM-001",
+        "source_kind": "synthetic_demo",
+        "visible_default": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.806,
+          30.673
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "高风险障碍物参考点",
+        "asset_type": "obstacle",
+        "risk_level": "high",
+        "height_m": 85,
+        "source_kind": "synthetic_demo",
+        "visible_default": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.775,
+          30.655
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "地形采样点-01",
+        "asset_type": "elevation_sample",
+        "elevation_m": 465,
+        "source_kind": "synthetic_demo",
+        "visible_default": false
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.758,
+          30.651
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-REF-001",
+        "name": "合成参考点-01",
+        "asset_type": "route_reference_point",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "reference_kind": "synthetic_navigation_reference",
+        "selectable_as_route_waypoint": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.734537,
+          30.672791
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-REF-002",
+        "name": "合成参考点-02",
+        "asset_type": "route_reference_point",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "reference_kind": "synthetic_navigation_reference",
+        "selectable_as_route_waypoint": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.778963,
+          30.678203
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-REF-003",
+        "name": "合成参考点-03",
+        "asset_type": "route_reference_point",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "reference_kind": "synthetic_navigation_reference",
+        "selectable_as_route_waypoint": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.794005,
+          30.730964
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-REF-004",
+        "name": "合成参考点-04",
+        "asset_type": "route_reference_point",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "reference_kind": "synthetic_navigation_reference",
+        "selectable_as_route_waypoint": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.762502,
+          30.686391
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-REF-005",
+        "name": "合成参考点-05",
+        "asset_type": "route_reference_point",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "reference_kind": "synthetic_navigation_reference",
+        "selectable_as_route_waypoint": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.766194,
+          30.660257
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-REF-006",
+        "name": "合成参考点-06",
+        "asset_type": "route_reference_point",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "reference_kind": "synthetic_navigation_reference",
+        "selectable_as_route_waypoint": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.722452,
+          30.729328
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-REF-007",
+        "name": "合成参考点-07",
+        "asset_type": "route_reference_point",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "reference_kind": "synthetic_navigation_reference",
+        "selectable_as_route_waypoint": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.761507,
+          30.685795
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-REF-008",
+        "name": "合成参考点-08",
+        "asset_type": "route_reference_point",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "reference_kind": "synthetic_navigation_reference",
+        "selectable_as_route_waypoint": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.712021,
+          30.704249
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-REF-009",
+        "name": "合成参考点-09",
+        "asset_type": "route_reference_point",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "reference_kind": "synthetic_navigation_reference",
+        "selectable_as_route_waypoint": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.720976,
+          30.658534
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-REF-010",
+        "name": "合成参考点-10",
+        "asset_type": "route_reference_point",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "reference_kind": "synthetic_navigation_reference",
+        "selectable_as_route_waypoint": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.754136,
+          30.687512
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-REF-011",
+        "name": "合成参考点-11",
+        "asset_type": "route_reference_point",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "reference_kind": "synthetic_navigation_reference",
+        "selectable_as_route_waypoint": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.78427,
+          30.622503
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-REF-012",
+        "name": "合成参考点-12",
+        "asset_type": "route_reference_point",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "reference_kind": "synthetic_navigation_reference",
+        "selectable_as_route_waypoint": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.815336,
+          30.714665
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-REF-013",
+        "name": "合成参考点-13",
+        "asset_type": "route_reference_point",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "reference_kind": "synthetic_navigation_reference",
+        "selectable_as_route_waypoint": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.766388,
+          30.712689
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-REF-014",
+        "name": "合成参考点-14",
+        "asset_type": "route_reference_point",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "reference_kind": "synthetic_navigation_reference",
+        "selectable_as_route_waypoint": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.739506,
+          30.681011
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-REF-015",
+        "name": "合成参考点-15",
+        "asset_type": "route_reference_point",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "reference_kind": "synthetic_navigation_reference",
+        "selectable_as_route_waypoint": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.759428,
+          30.73455
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-REF-016",
+        "name": "合成参考点-16",
+        "asset_type": "route_reference_point",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "reference_kind": "synthetic_navigation_reference",
+        "selectable_as_route_waypoint": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.791041,
+          30.649913
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-REF-017",
+        "name": "合成参考点-17",
+        "asset_type": "route_reference_point",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "reference_kind": "synthetic_navigation_reference",
+        "selectable_as_route_waypoint": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.739424,
+          30.668504
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-REF-018",
+        "name": "合成参考点-18",
+        "asset_type": "route_reference_point",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "reference_kind": "synthetic_navigation_reference",
+        "selectable_as_route_waypoint": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.739234,
+          30.657073
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-REF-019",
+        "name": "合成参考点-19",
+        "asset_type": "route_reference_point",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "reference_kind": "synthetic_navigation_reference",
+        "selectable_as_route_waypoint": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.710171,
+          30.71184
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-REF-020",
+        "name": "合成参考点-20",
+        "asset_type": "route_reference_point",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "reference_kind": "synthetic_navigation_reference",
+        "selectable_as_route_waypoint": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.768377,
+          30.719581
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-REF-021",
+        "name": "合成参考点-21",
+        "asset_type": "route_reference_point",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "reference_kind": "synthetic_navigation_reference",
+        "selectable_as_route_waypoint": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.78567,
+          30.730121
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-REF-022",
+        "name": "合成参考点-22",
+        "asset_type": "route_reference_point",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "reference_kind": "synthetic_navigation_reference",
+        "selectable_as_route_waypoint": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.750329,
+          30.665804
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-REF-023",
+        "name": "合成参考点-23",
+        "asset_type": "route_reference_point",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "reference_kind": "synthetic_navigation_reference",
+        "selectable_as_route_waypoint": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.735483,
+          30.656122
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-REF-024",
+        "name": "合成参考点-24",
+        "asset_type": "route_reference_point",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "reference_kind": "synthetic_navigation_reference",
+        "selectable_as_route_waypoint": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.720386,
+          30.730045
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-REF-025",
+        "name": "合成参考点-25",
+        "asset_type": "route_reference_point",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "reference_kind": "synthetic_navigation_reference",
+        "selectable_as_route_waypoint": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.751537,
+          30.700559
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-REF-026",
+        "name": "合成参考点-26",
+        "asset_type": "route_reference_point",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "reference_kind": "synthetic_navigation_reference",
+        "selectable_as_route_waypoint": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.755701,
+          30.639774
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-REF-027",
+        "name": "合成参考点-27",
+        "asset_type": "route_reference_point",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "reference_kind": "synthetic_navigation_reference",
+        "selectable_as_route_waypoint": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.750517,
+          30.655592
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-REF-028",
+        "name": "合成参考点-28",
+        "asset_type": "route_reference_point",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "reference_kind": "synthetic_navigation_reference",
+        "selectable_as_route_waypoint": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.791024,
+          30.727263
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-REF-029",
+        "name": "合成参考点-29",
+        "asset_type": "route_reference_point",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "reference_kind": "synthetic_navigation_reference",
+        "selectable_as_route_waypoint": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.815838,
+          30.636788
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-REF-030",
+        "name": "合成参考点-30",
+        "asset_type": "route_reference_point",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "reference_kind": "synthetic_navigation_reference",
+        "selectable_as_route_waypoint": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.791074,
+          30.666529
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-RISK-001",
+        "name": "合成危险点-01",
+        "asset_type": "hazard",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "risk_level": "medium",
+        "height_m": 31,
+        "risk_kind": "synthetic_obstacle_reference",
+        "requires_human_verification": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.741613,
+          30.697469
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-RISK-002",
+        "name": "合成危险点-02",
+        "asset_type": "hazard",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "risk_level": "medium",
+        "height_m": 31,
+        "risk_kind": "synthetic_obstacle_reference",
+        "requires_human_verification": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.708716,
+          30.693925
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-RISK-003",
+        "name": "合成危险点-03",
+        "asset_type": "hazard",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "risk_level": "medium",
+        "height_m": 82,
+        "risk_kind": "synthetic_obstacle_reference",
+        "requires_human_verification": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.707527,
+          30.630466
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-RISK-004",
+        "name": "合成危险点-04",
+        "asset_type": "hazard",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "risk_level": "medium",
+        "height_m": 69,
+        "risk_kind": "synthetic_obstacle_reference",
+        "requires_human_verification": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.81678,
+          30.725206
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-RISK-005",
+        "name": "合成危险点-05",
+        "asset_type": "hazard",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "risk_level": "medium",
+        "height_m": 26,
+        "risk_kind": "synthetic_obstacle_reference",
+        "requires_human_verification": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.781913,
+          30.681153
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-RISK-006",
+        "name": "合成危险点-06",
+        "asset_type": "hazard",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "risk_level": "high",
+        "height_m": 90,
+        "risk_kind": "synthetic_obstacle_reference",
+        "requires_human_verification": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.727922,
+          30.719724
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-RISK-007",
+        "name": "合成危险点-07",
+        "asset_type": "hazard",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "risk_level": "medium",
+        "height_m": 15,
+        "risk_kind": "synthetic_obstacle_reference",
+        "requires_human_verification": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.736385,
+          30.680176
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-RISK-008",
+        "name": "合成危险点-08",
+        "asset_type": "hazard",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "risk_level": "medium",
+        "height_m": 39,
+        "risk_kind": "synthetic_obstacle_reference",
+        "requires_human_verification": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.803969,
+          30.694598
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-RISK-009",
+        "name": "合成危险点-09",
+        "asset_type": "hazard",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "risk_level": "medium",
+        "height_m": 27,
+        "risk_kind": "synthetic_obstacle_reference",
+        "requires_human_verification": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.713543,
+          30.689042
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-RISK-010",
+        "name": "合成危险点-10",
+        "asset_type": "hazard",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "risk_level": "medium",
+        "height_m": 70,
+        "risk_kind": "synthetic_obstacle_reference",
+        "requires_human_verification": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.760847,
+          30.730022
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-RISK-011",
+        "name": "合成危险点-11",
+        "asset_type": "hazard",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "risk_level": "medium",
+        "height_m": 75,
+        "risk_kind": "synthetic_obstacle_reference",
+        "requires_human_verification": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.738091,
+          30.68116
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-RISK-012",
+        "name": "合成危险点-12",
+        "asset_type": "hazard",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "risk_level": "high",
+        "height_m": 68,
+        "risk_kind": "synthetic_obstacle_reference",
+        "requires_human_verification": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.744438,
+          30.667968
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-RISK-013",
+        "name": "合成危险点-13",
+        "asset_type": "hazard",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "risk_level": "medium",
+        "height_m": 87,
+        "risk_kind": "synthetic_obstacle_reference",
+        "requires_human_verification": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.782468,
+          30.664819
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-RISK-014",
+        "name": "合成危险点-14",
+        "asset_type": "hazard",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "risk_level": "medium",
+        "height_m": 81,
+        "risk_kind": "synthetic_obstacle_reference",
+        "requires_human_verification": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.736688,
+          30.635549
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-RISK-015",
+        "name": "合成危险点-15",
+        "asset_type": "hazard",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "risk_level": "medium",
+        "height_m": 30,
+        "risk_kind": "synthetic_obstacle_reference",
+        "requires_human_verification": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.759129,
+          30.648076
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-RISK-016",
+        "name": "合成危险点-16",
+        "asset_type": "hazard",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "risk_level": "medium",
+        "height_m": 95,
+        "risk_kind": "synthetic_obstacle_reference",
+        "requires_human_verification": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.769309,
+          30.645472
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-RISK-017",
+        "name": "合成危险点-17",
+        "asset_type": "hazard",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "risk_level": "medium",
+        "height_m": 87,
+        "risk_kind": "synthetic_obstacle_reference",
+        "requires_human_verification": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.79075,
+          30.624205
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-RISK-018",
+        "name": "合成危险点-18",
+        "asset_type": "hazard",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "risk_level": "high",
+        "height_m": 89,
+        "risk_kind": "synthetic_obstacle_reference",
+        "requires_human_verification": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.707689,
+          30.710606
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-RISK-019",
+        "name": "合成危险点-19",
+        "asset_type": "hazard",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "risk_level": "medium",
+        "height_m": 49,
+        "risk_kind": "synthetic_obstacle_reference",
+        "requires_human_verification": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.765635,
+          30.672786
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-RISK-020",
+        "name": "合成危险点-20",
+        "asset_type": "hazard",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "risk_level": "medium",
+        "height_m": 15,
+        "risk_kind": "synthetic_obstacle_reference",
+        "requires_human_verification": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.78796,
+          30.668516
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-RISK-021",
+        "name": "合成危险点-21",
+        "asset_type": "hazard",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "risk_level": "medium",
+        "height_m": 92,
+        "risk_kind": "synthetic_obstacle_reference",
+        "requires_human_verification": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.789477,
+          30.629016
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-RISK-022",
+        "name": "合成危险点-22",
+        "asset_type": "hazard",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "risk_level": "medium",
+        "height_m": 41,
+        "risk_kind": "synthetic_obstacle_reference",
+        "requires_human_verification": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.76501,
+          30.677075
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-RISK-023",
+        "name": "合成危险点-23",
+        "asset_type": "hazard",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "risk_level": "medium",
+        "height_m": 25,
+        "risk_kind": "synthetic_obstacle_reference",
+        "requires_human_verification": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.768787,
+          30.677212
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "point_id": "SYN-RISK-024",
+        "name": "合成危险点-24",
+        "asset_type": "hazard",
+        "source_kind": "synthetic_demo",
+        "quality_level": "synthetic_demo",
+        "visible_default": true,
+        "generated_for": "map_visualization_only",
+        "risk_level": "high",
+        "height_m": 78,
+        "risk_kind": "synthetic_obstacle_reference",
+        "requires_human_verification": true
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.79107,
+          30.663101
+        ]
+      }
+    }
+  ]
+}

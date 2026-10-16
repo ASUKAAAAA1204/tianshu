@@ -1,9 +1,4 @@
-"""Storage adapter boundary.
-
-The current implementation uses SQLite for offline and competition modes.
-The interface is intentionally small so PostgreSQL/PostGIS can be added
-without changing HTTP handlers or domain services.
-"""
+"""Storage adapter boundary for offline SQLite and PostgreSQL/PostGIS modes."""
 
 from __future__ import annotations
 
@@ -12,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator
 
-from db import DATABASE_URL, DEFAULT_DB, database_config, connect
+from db import DATABASE_URL, DEFAULT_DB, database_config, connect, sqlite_path_from_url
 
 
 @dataclass(frozen=True)
@@ -100,13 +95,7 @@ class PostgresStorage(StorageAdapter):
 def build_storage(url: str | None = None) -> StorageAdapter:
     config = database_config(url) if url else database_config()
     if config["backend"] == "sqlite":
-        if config["url"].startswith("sqlite:///"):
-            raw_path = config["url"][len("sqlite:///"):]
-            path = Path(raw_path)
-            if not path.is_absolute():
-                path = Path.cwd() / path
-            return SQLiteStorage(path)
-        return SQLiteStorage()
+        return SQLiteStorage(sqlite_path_from_url(config["url"]))
     if config["backend"] == "postgresql":
         return PostgresStorage(config["url"])
     raise RuntimeError("当前版本尚未启用PostgreSQL适配器，请继续使用SQLite或完成驱动部署")

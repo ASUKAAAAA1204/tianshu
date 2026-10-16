@@ -2,13 +2,18 @@ import json
 import sys
 import tempfile
 import unittest
+from contextlib import contextmanager
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
-from db import connect, database_capabilities, database_config, init_db, session  # noqa: E402
-from server import ApiError, validate_mission, Handler  # noqa: E402
+import db as db_module  # noqa: E402
+from db import connect, database_capabilities, database_config, hash_password, init_db, session, sqlite_path_from_url, verify_password  # noqa: E402
+import server as server_module  # noqa: E402
+from server import ApiError, validate_mission, Handler, normalize_time_window, windows_overlap, route_paths_intersect, telemetry_track_csv  # noqa: E402
 from repository import PostgresStorage, SQLiteStorage, build_storage  # noqa: E402
 from spatial_repository import INTERSECTION_SQL  # noqa: E402
+from telemetry import TelemetryError, normalize_telemetry, runtime_alerts  # noqa: E402
+from postgres_compat import HybridRow, translate_sql  # noqa: E402
 
 
 class DatabaseTests(unittest.TestCase):
@@ -21,8 +26,10 @@ class DatabaseTests(unittest.TestCase):
                 self.assertEqual(db.execute("SELECT COUNT(*) FROM layers").fetchone()[0], 4)
                 self.assertEqual(db.execute("SELECT COUNT(*) FROM vehicles").fetchone()[0], 3)
                 self.assertEqual(db.execute("SELECT COUNT(*) FROM missions").fetchone()[0], 3)
+                self.assertIsNotNone(db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='sessions'").fetchone())
                 geometry = json.loads(db.execute("SELECT geometry_json FROM layers LIMIT 1").fetchone()[0])
                 self.assertTrue(geometry["coordinates"])
+                self.assertIsNotNone(db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='route_replans'").fetchone())
             finally:
                 db.close()
 
@@ -45,7 +52,7 @@ class DatabaseTests(unittest.TestCase):
             init_db(path)
             db = connect(path)
             try:
-                self.assertEqual(db.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0], 3)
+                self.assertEqual(db.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0], len(db_module.MIGRATIONS))
             finally:
                 db.close()
 
@@ -57,6 +64,11 @@ class DatabaseTests(unittest.TestCase):
         pg = database_config("postgresql://user:pass@localhost:5432/demo")
         self.assertEqual(pg["backend"], "postgresql")
         self.assertIn("ready", pg)
+
+    def test_sqlite_url_resolves_relative_and_absolute_paths(self):
+        self.assertEqual(sqlite_path_from_url("sqlite:///data/demo.db"), db_module.ROOT / "data" / "demo.db")
+        absolute = sqlite_path_from_url("sqlite:///D:/tmp/demo.db")
+        self.assertEqual(str(absolute).replace("\\", "/"), "D:/tmp/demo.db")
 
     def test_unknown_database_scheme_is_not_ready(self):
         config = database_config("oracle://localhost/demo")
@@ -82,6 +94,15 @@ class DatabaseTests(unittest.TestCase):
         self.assertIn("%s", INTERSECTION_SQL)
         self.assertNotIn("107.745", INTERSECTION_SQL)
 
+    def test_postgres_compatibility_contract(self):
+        self.assertEqual(translate_sql("SELECT * FROM missions WHERE id=?"), "SELECT * FROM missions WHERE id=%s")
+        self.assertEqual(translate_sql("INSERT INTO missions(id,name) VALUES(:id,:name)"), "INSERT INTO missions(id,name) VALUES(%s,%s)")
+        self.assertEqual(translate_sql("SELECT * FROM users WHERE enabled=1"), "SELECT * FROM users WHERE enabled=TRUE")
+        self.assertEqual(json.loads(__import__("postgres_compat").normalize_value({"type": "Polygon"}, "geometry_json"))["type"], "Polygon")
+        row = HybridRow({"id": "MS-1", "status": "planned"})
+        self.assertEqual(row[0], "MS-1")
+        self.assertEqual(row["status"], "planned")
+
 
 class ValidationTests(unittest.TestCase):
     def valid(self):
@@ -89,6 +110,29 @@ class ValidationTests(unittest.TestCase):
 
     def test_valid_mission(self):
         self.assertEqual(validate_mission(self.valid())["planned_altitude"], 120.0)
+
+    def test_normalizes_and_validates_time_window(self):
+        payload = self.valid()
+        payload["time_window_start"] = "2026-09-18T10:00"
+        payload["time_window_end"] = "2026-09-18T10:30"
+        result = validate_mission(payload)
+        self.assertTrue(result["time_window_start"].endswith("+00:00"))
+        self.assertTrue(windows_overlap(result["time_window_start"], result["time_window_end"], "2026-09-18T10:20:00+00:00", "2026-09-18T11:00:00+00:00"))
+
+    def test_rejects_incomplete_or_reversed_time_window(self):
+        payload = self.valid()
+        payload["time_window_start"] = "2026-09-18T10:00"
+        with self.assertRaises(ApiError) as context:
+            validate_mission(payload)
+        self.assertEqual(context.exception.code, "INCOMPLETE_TIME_WINDOW")
+        payload["time_window_end"] = "2026-09-18T09:00"
+        with self.assertRaises(ApiError) as context:
+            validate_mission(payload)
+        self.assertEqual(context.exception.code, "INVALID_TIME_WINDOW")
+
+    def test_route_path_intersection_detects_crossing(self):
+        self.assertTrue(route_paths_intersect([[0, 0, 100], [1, 1, 100]], [[0, 1, 100], [1, 0, 100]]))
+        self.assertFalse(route_paths_intersect([[0, 0, 100], [1, 0, 100]], [[0, 1, 100], [1, 1, 100]]))
 
     def test_rejects_excessive_altitude(self):
         payload = self.valid()
@@ -136,6 +180,17 @@ class ValidationTests(unittest.TestCase):
         import hashlib
         self.assertNotEqual(hashlib.sha256("admin123".encode()).hexdigest(), "admin123")
 
+    def test_password_hash_uses_slow_derivation_and_verifies(self):
+        stored = hash_password("admin123")
+        self.assertTrue(stored.startswith("pbkdf2_sha256$"))
+        self.assertEqual(verify_password("admin123", stored), (True, False))
+        self.assertEqual(verify_password("wrong", stored), (False, False))
+
+    def test_legacy_password_hash_is_upgradeable(self):
+        import hashlib
+        legacy = hashlib.sha256("admin123".encode()).hexdigest()
+        self.assertEqual(verify_password("admin123", legacy), (True, True))
+
     def test_supported_roles_are_explicit(self):
         self.assertEqual({"admin", "dispatcher", "observer", "auditor"}, {"admin", "dispatcher", "observer", "auditor"})
 
@@ -144,6 +199,48 @@ class ValidationTests(unittest.TestCase):
 
     def test_lockout_threshold(self):
         self.assertEqual(5, 5)
+
+    def test_normalize_telemetry_contract(self):
+        item = normalize_telemetry({"longitude": 107.74, "latitude": 30.64, "altitude": 120, "battery": 88, "link_quality": 92})
+        self.assertEqual(item["source"], "simulator")
+        self.assertEqual(item["link"], "online")
+        self.assertIn("timestamp", item)
+
+    def test_telemetry_rejects_invalid_coordinates(self):
+        with self.assertRaises(TelemetryError) as context:
+            normalize_telemetry({"longitude": 120, "latitude": 30.64, "altitude": 120, "battery": 88})
+        self.assertEqual(context.exception.code, "INVALID_TELEMETRY")
+
+    def test_runtime_alerts_are_explainable_and_safe(self):
+        item = normalize_telemetry({"longitude": 107.74, "latitude": 30.64, "altitude": 120, "battery": 10, "link_quality": 20})
+        alerts = runtime_alerts(item)
+        self.assertEqual({x["event_type"] for x in alerts}, {"low_battery", "link_loss"})
+
+    def test_telemetry_samples_form_ordered_track(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "track.db"
+            init_db(path)
+            db = connect(path)
+            try:
+                mission_id = db.execute("SELECT id FROM missions ORDER BY id LIMIT 1").fetchone()[0]
+                db.execute("INSERT INTO flight_sessions(mission_id,status,progress,telemetry_json) VALUES(?,?,?,?)", (mission_id, "running", 0, "{}"))
+                session_id = db.execute("SELECT id FROM flight_sessions WHERE mission_id=?", (mission_id,)).fetchone()[0]
+                handler = Handler.__new__(Handler)
+                first = normalize_telemetry({"longitude": 107.74, "latitude": 30.64, "altitude": 120, "battery": 95})
+                second = normalize_telemetry({"longitude": 107.75, "latitude": 30.65, "altitude": 120, "battery": 90})
+                handler._record_telemetry_sample(db, mission_id, session_id, first)
+                handler._record_telemetry_sample(db, mission_id, session_id, second)
+                track = handler._telemetry_track(mission_id, db, session_id)
+                self.assertEqual([item["sequence"] for item in track], [1, 2])
+                self.assertEqual(track[-1]["longitude"], second["longitude"])
+            finally:
+                db.close()
+
+    def test_telemetry_track_csv_has_stable_columns(self):
+        csv_body = telemetry_track_csv([{"sequence": 1, "timestamp": "2026-10-16T00:00:00+00:00", "longitude": 107.7, "latitude": 30.6, "altitude": 120, "speed": 12, "heading": 90, "battery": 95, "link_quality": 100, "status": "airborne", "source": "simulator"}])
+        self.assertTrue(csv_body.startswith("\ufeffsequence,timestamp,longitude"))
+        self.assertIn("\r\n1,2026-10-16T00:00:00+00:00", csv_body)
+
 
 
 if __name__ == "__main__":

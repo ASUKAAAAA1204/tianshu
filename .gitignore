@@ -3,5 +3,14 @@ __pycache__/
 data/platform.db
 data/platform.db-journal
 .pytest_cache/
+test-results/
+playwright-report/
 .DS_Store
 Thumbs.db
+node_modules/
+.tmp-maplibre/
+_recovery_patches/
+data/demo-runtime.db
+data/demo-runtime.db-*
+data/local-login-payload.json
+*.log
