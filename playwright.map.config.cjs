@@ -19,7 +19,7 @@ module.exports = defineConfig({
   expect: { timeout: 8_000 },
   fullyParallel: false,
   reporter: [["list"]],
-  use: { baseURL: "http://127.0.0.1:8890", channel: "chrome", viewport: { width: 1366, height: 768 }, ...devices["Desktop Chrome"] },
+  use: { ...devices["Desktop Chrome"], baseURL: "http://127.0.0.1:8890", channel: "chrome", viewport: { width: 1366, height: 768 } },
   webServer: {
     command: "python backend/server.py",
     cwd: __dirname,

@@ -98,7 +98,7 @@
 .facility-dialog .facility-form .primary,.facility-dialog .facility-form .form-message{grid-column:span 2}
 .facility-dialog .facility-admin-list{max-height:35vh}
 @media(max-width:1100px){.map-workspace{grid-template-columns:150px minmax(0,1fr) 280px}.shell{padding-inline:12px}.map-canvas{height:280px;min-height:280px;max-height:280px}}
-@media(max-width:900px){.map-workspace{grid-template-columns:minmax(0,1fr)}.map-sidebar{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}.map-sidebar>.panel-head{grid-column:span 2}.map-sidebar .layer-panel{margin-top:5px}.map-panel{order:-1}.map-canvas{height:52vh;min-height:330px}.mission-panel{max-height:none}.mission-list{flex:0 0 auto;max-height:280px}.map-foot{display:flex;flex-direction:column;align-items:stretch}.map-foot .map-data-boundary{max-width:none;text-align:left}.metrics-compact{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));padding:4px 8px}.metrics-compact .metric{border-right:0;padding:4px 6px}.facility-dialog .facility-form{grid-template-columns:1fr}.facility-dialog .facility-coords,.facility-dialog .facility-form .primary,.facility-dialog .facility-form .form-message{grid-column:auto}}
+@media(max-width:900px){.map-workspace{grid-template-columns:minmax(0,1fr)}.map-sidebar{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}.map-sidebar>.panel-head{grid-column:span 2}.map-sidebar>.sidebar-data{grid-column:1/-1}.map-sidebar .layer-panel{margin-top:5px}.map-panel{order:-1}.map-canvas{height:52vh;min-height:330px}.mission-panel{max-height:none}.mission-list{flex:0 0 auto;max-height:280px}.map-foot{display:flex;flex-direction:column;align-items:stretch}.map-foot .map-data-boundary{max-width:none;text-align:left}.metrics-compact{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));padding:4px 8px}.metrics-compact .metric{border-right:0;padding:4px 6px}.facility-dialog .facility-form{grid-template-columns:1fr}.facility-dialog .facility-coords,.facility-dialog .facility-form .primary,.facility-dialog .facility-form .form-message{grid-column:auto}}
 @media(max-width:520px){.track-replay{grid-template-columns:1fr;gap:5px}.track-replay-head{align-items:flex-start}.track-replay-controls output{min-width:72px}}
 @media(max-width:520px){.topbar{padding:12px 14px}.topbar h1{font-size:16px}.topbar-meta{font-size:11px}.shell{padding:8px}.map-sidebar{grid-template-columns:1fr}.map-sidebar>.panel-head{grid-column:auto}.map-canvas{height:48vh;min-height:290px}.map-head{display:block}.map-head>.badge{display:inline-block;margin-top:5px}.mission-panel{padding:10px}.mission-panel>.panel-head{align-items:center}.map-foot{font-size:9px}}
 
@@ -125,8 +125,18 @@
 
 /* Sprint M3 P0: keep the task-focused map dominant in the first viewport. */
 @media (min-width:1100px){
-  .map-workspace{grid-template-columns:170px minmax(560px,1fr) 250px;gap:12px;align-items:start}
-  .map-panel .map-canvas{height:250px;min-height:250px}
+  .map-workspace{grid-template-columns:clamp(300px,21vw,330px) minmax(560px,1fr) clamp(220px,17vw,250px);gap:12px;align-items:start}
+  .map-sidebar{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(0,.92fr);grid-template-rows:auto auto auto auto auto;align-content:start;column-gap:10px;row-gap:2px}
+  .map-sidebar>.panel-head,.map-sidebar>.sidebar-data{grid-column:1/-1}
+  .sidebar-controls{display:contents}
+  .sidebar-controls>.layer-panel:first-child{grid-column:1/-1;grid-row:2}
+  .sidebar-controls>.layer-panel:nth-child(2){grid-column:1;grid-row:3}
+  .sidebar-controls>.layer-panel:nth-child(3){grid-column:1;grid-row:4}
+  .map-sidebar>.sidebar-reference{grid-column:2;grid-row:3/5;display:flex;flex-direction:column;gap:2px;min-width:0}
+  .map-sidebar>.sidebar-data{grid-row:5}
+  .map-sidebar .sidebar-reference .route-waypoint-list{max-height:110px;overflow:auto}
+  .map-sidebar .sidebar-data .data-register{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+  .map-panel .map-canvas{height:270px;min-height:270px}
   .map-panel{min-width:0}
   .map-timeline{margin-top:10px}
   .mission-panel{max-height:none;overflow:visible}

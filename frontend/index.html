@@ -25,12 +25,16 @@
       <section class="workspace map-workspace" aria-label="低空运行地图工作区">
         <aside class="panel map-sidebar" aria-label="地图图层与筛选">
           <div class="panel-head"><div><span class="section-kicker">图层与筛选</span><h2>地图内容</h2></div></div>
-          <div class="layer-panel"><div class="subhead">显示图层</div><div id="layerList"></div></div>
-          <div class="layer-panel"><label class="altitude-control">飞行高度<select id="altitudeFilter"><option value="all">全部高度</option><option value="0-60">0–60 m</option><option value="60-120">60–120 m</option><option value="120-300">120–300 m</option><option value="300+">300 m+</option></select></label><div id="altitudeLayerReadout" class="altitude-layer-readout" aria-live="polite">当前高度层：全部高度</div></div>
-          <div class="layer-panel map-nav-tools"><div class="subhead">地图导航</div><div class="map-zoom"><button type="button" id="mapZoomOut" aria-label="缩小地图">−</button><button type="button" id="mapZoomIn" aria-label="放大地图">＋</button><button type="button" id="mapReset" aria-label="重置地图视图">复位</button></div></div>
-          <section class="route-waypoint-panel" aria-label="航线参考设施点"><div class="route-waypoint-heading"><strong>航线参考点</strong><small>选任务附近设施作为参考航点，不代表起降许可</small></div><div id="routeWaypointList" class="route-waypoint-list"><span class="route-waypoint-empty">地图缩放至 12 级以上后显示</span></div></section>
-          <div class="layer-panel"><div class="subhead">图例</div><div class="legend legend-vertical"><span><i class="legend-box route-primary-key"></i>主航线</span><span><i class="legend-box route-actual-key"></i>模拟轨迹</span><span><i class="legend-box control-zone-key"></i>临时管制范围</span><span><i class="legend-box reference-point-key"></i>合成参考点</span><span><i class="legend-box amber"></i>任务附近设施</span><span><i class="legend-box red"></i>合成危险点</span></div></div>
-          <div class="layer-panel"><div class="subhead">地理数据准入</div><div class="terrain-notice" id="terrainStatus">DEM：离线合成网格 · 仅用于演示指标</div><div class="data-register" id="dataRegister" aria-label="地理数据登记"></div></div>
+          <div class="sidebar-controls">
+            <div class="layer-panel"><div class="subhead">显示图层</div><div id="layerList"></div></div>
+            <div class="layer-panel"><label class="altitude-control">飞行高度<select id="altitudeFilter"><option value="all">全部高度</option><option value="0-60">0–60 m</option><option value="60-120">60–120 m</option><option value="120-300">120–300 m</option><option value="300+">300 m+</option></select></label><div id="altitudeLayerReadout" class="altitude-layer-readout" aria-live="polite">当前高度层：全部高度</div></div>
+            <div class="layer-panel map-nav-tools"><div class="subhead">地图导航</div><div class="map-zoom"><button type="button" id="mapZoomOut" aria-label="缩小地图">−</button><button type="button" id="mapZoomIn" aria-label="放大地图">＋</button><button type="button" id="mapReset" aria-label="重置地图视图">复位</button></div></div>
+          </div>
+          <div class="sidebar-reference">
+            <section class="route-waypoint-panel" aria-label="航线参考设施点"><div class="route-waypoint-heading"><strong>航线参考点</strong><small>选任务附近设施作为参考航点，不代表起降许可</small></div><div id="routeWaypointList" class="route-waypoint-list"><span class="route-waypoint-empty">地图缩放至 12 级以上后显示</span></div></section>
+            <div class="layer-panel"><div class="subhead">图例</div><div class="legend legend-vertical"><span><i class="legend-box route-primary-key"></i>主航线</span><span><i class="legend-box route-actual-key"></i>模拟轨迹</span><span><i class="legend-box control-zone-key"></i>临时管制范围</span><span><i class="legend-box reference-point-key"></i>合成参考点</span><span><i class="legend-box amber"></i>任务附近设施</span><span><i class="legend-box red"></i>合成危险点</span></div></div>
+          </div>
+          <div class="layer-panel sidebar-data"><div class="subhead">地理数据准入</div><div class="terrain-notice" id="terrainStatus">DEM：离线合成网格 · 仅用于演示指标</div><div class="data-register" id="dataRegister" aria-label="地理数据登记"></div></div>
         </aside>
         <section class="panel map-panel" aria-label="任务聚焦地图">
           <div class="map-head"><div><span class="section-kicker">01 / 空域态势 · 公开参考 / 合成演示</span><h2>低空运行态势</h2><p id="mapMissionSummary">请选择任务以查看相关空间范围</p></div><span class="badge badge-blue">演示数据</span></div>

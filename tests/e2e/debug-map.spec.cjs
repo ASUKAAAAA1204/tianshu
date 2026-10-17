@@ -47,15 +47,23 @@ test("MapLibre workspace is focused and readable", async ({ page }) => {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
   const layout = await page.evaluate(() => {
     const workspace = document.querySelector(".map-workspace").getBoundingClientRect();
+    const sidebar = document.querySelector(".map-sidebar").getBoundingClientRect();
     const map = document.querySelector("#mapCanvas").getBoundingClientRect();
-    return { mapRatio: map.width / workspace.width, mapHeight: map.height, boundaryVisible: document.querySelector(".map-data-boundary").getBoundingClientRect().bottom <= window.innerHeight };
+    const mapPanel = document.querySelector(".map-panel").getBoundingClientRect();
+    const nextSection = document.querySelector(".lower-grid").getBoundingClientRect();
+    return { mapRatio: map.width / workspace.width, mapWidth: map.width, sidebarWidth: sidebar.width, mapHeight: map.height, verticalGap: nextSection.top - mapPanel.bottom, sidebarColumns: getComputedStyle(document.querySelector(".map-sidebar")).gridTemplateColumns, boundaryVisible: document.querySelector(".map-data-boundary").getBoundingClientRect().bottom <= window.innerHeight };
   });
-  expect(layout.mapRatio).toBeGreaterThanOrEqual(0.6);
-  expect(layout.mapHeight).toBeGreaterThanOrEqual(240);
+  console.log("desktop map layout", JSON.stringify(layout));
+  await page.screenshot({ path: screenshot("maplibre-1366x768.png"), fullPage: false });
+  expect(layout.sidebarWidth).toBeGreaterThanOrEqual(300);
+  expect(layout.mapWidth).toBeGreaterThanOrEqual(560);
+  expect(layout.sidebarColumns.split(" ")).toHaveLength(2);
+  expect(layout.verticalGap).toBeLessThanOrEqual(150);
+  expect(layout.mapRatio).toBeGreaterThanOrEqual(0.54);
+  expect(layout.mapHeight).toBeGreaterThanOrEqual(260);
   expect(layout.boundaryVisible).toBeTruthy();
   expect(await page.locator("#mapTimelineTrack .timeline-item").first().evaluate((node) => { const box = node.getBoundingClientRect(); return box.top >= 0 && box.bottom <= window.innerHeight; })).toBeTruthy();
   expect(pageErrors).toEqual([]);
-  await page.screenshot({ path: screenshot("maplibre-1366x768.png"), fullPage: false });
   await page.setViewportSize({ width: 1024, height: 768 });
   await page.screenshot({ path: screenshot("maplibre-1024x768.png"), fullPage: false });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
