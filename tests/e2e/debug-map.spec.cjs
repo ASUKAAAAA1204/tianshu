@@ -52,7 +52,8 @@ test("MapLibre workspace is focused and readable", async ({ page }) => {
     const map = document.querySelector("#mapCanvas").getBoundingClientRect();
     const mapPanel = document.querySelector(".map-panel").getBoundingClientRect();
     const nextSection = document.querySelector(".lower-grid").getBoundingClientRect();
-    return { mapRatio: map.width / workspace.width, mapWidth: map.width, sidebarWidth: sidebar.width, mapHeight: map.height, verticalGap: nextSection.top - mapPanel.bottom, sidebarColumns: getComputedStyle(document.querySelector(".map-sidebar")).gridTemplateColumns, boundaryVisible: document.querySelector(".map-data-boundary").getBoundingClientRect().bottom <= window.innerHeight };
+    const mission = document.querySelector(".mission-panel").getBoundingClientRect();
+    return { mapRatio: map.width / workspace.width, mapWidth: map.width, sidebarWidth: sidebar.width, sidebarHeight: sidebar.height, mapHeight: map.height, workspaceBottom: workspace.bottom, sidebarBottom: sidebar.bottom, mapPanelBottom: mapPanel.bottom, missionBottom: mission.bottom, nextSectionTop: nextSection.top, verticalGap: nextSection.top - mapPanel.bottom, sidebarColumns: getComputedStyle(document.querySelector(".map-sidebar")).gridTemplateColumns, boundaryVisible: document.querySelector(".map-data-boundary").getBoundingClientRect().bottom <= window.innerHeight };
   });
   console.log("desktop map layout", JSON.stringify(layout));
   await page.screenshot({ path: screenshot("maplibre-1366x768.png"), fullPage: false });
@@ -205,6 +206,103 @@ test("map controls update visible state", async ({ page }) => {
   await expect(page.locator("#mapTimelineTrack .timeline-item.is-active")).toHaveCount(1);
 });
 
+test("local place search can confirm and populate a mission endpoint", async ({ page }) => {
+  await page.goto("/?map=maplibre");
+  if (await page.locator("#loginGate").isVisible()) {
+    await page.locator("#loginForm input[name='username']").fill("admin");
+    await page.locator("#loginForm input[name='password']").fill(process.env.E2E_PASSWORD || "admin123");
+    await page.locator("#loginForm button[type='submit']").click();
+  }
+  await expect.poll(() => page.evaluate(() => Boolean(window.lpMap?.adapter?.referenceGeographyLoaded && window.lpMap.adapter.referenceGeographyData.some((item) => item.properties?.name)))).toBeTruthy();
+  const place = await page.evaluate(() => {
+    const features = window.lpMap.adapter.referenceGeographyData;
+    const feature = features.find((item) => item.properties?.name);
+    return { name: feature.properties.name, coordinates: feature.geometry.coordinates };
+  });
+  await page.locator("#newMission").click();
+  await page.locator("#placeSearchInput").fill(place.name);
+  await page.locator("#placeSearchSubmit").click();
+  await expect(page.locator("#placeSearchResults")).toContainText(place.name);
+  const displayedCoordinates = await page.locator(".place-search-result small").first().innerText();
+  const coordinateMatch = displayedCoordinates.match(/(-?\d+\.\d+),\s*(-?\d+\.\d+)/);
+  expect(coordinateMatch).not.toBeNull();
+  await page.locator(".place-search-result").first().getByRole("button", { name: "设为起点" }).click();
+  await expect(page.locator("#missionForm input[name='start_lng']")).toHaveValue(Number(coordinateMatch[1]).toFixed(6));
+  await expect(page.locator("#missionForm input[name='start_lat']")).toHaveValue(Number(coordinateMatch[2]).toFixed(6));
+  await page.locator(".place-search-result").first().getByRole("button", { name: "加入途经点" }).click();
+  await expect(page.locator("#missionViaPointList .mission-via-point")).toHaveCount(1);
+  expect(JSON.parse(await page.locator("#missionForm input[name='via_points_json']").inputValue())).toHaveLength(1);
+  await expect(page.locator("#formMessage")).toContainText("进入航线规划");
+  await expect.poll(() => page.evaluate(() => window.lpMap.adapter.map.getZoom())).toBeGreaterThanOrEqual(13);
+  expect(await page.locator("#placeSearchResults").evaluate((node) => node.innerText.includes("OSM 公开参考"))).toBeTruthy();
+  await expect(page.locator("#missionForm button[type='submit']")).toBeInViewport({ ratio: 1 });
+  await page.screenshot({ path: screenshot("local-place-search-1366x768.png"), fullPage: false });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
+  await page.screenshot({ path: screenshot("local-place-search-390x844.png"), fullPage: false });
+  await page.locator("#missionForm button[type='submit']").scrollIntoViewIfNeeded();
+  await expect(page.locator("#missionForm button[type='submit']")).toBeInViewport();
+  await page.setViewportSize({ width: 1366, height: 768 });
+  await page.locator("#missionForm input[name='id']").fill("MS-PLACE-QA-01");
+  await page.locator("#missionForm button[type='submit']").click();
+  await expect(page.locator("#missionDialog")).not.toBeVisible();
+  const persisted = await page.evaluate(async () => {
+    const token = localStorage.getItem("lp_token");
+    const response = await fetch("/api/missions/MS-PLACE-QA-01", { headers: { Authorization: `Bearer ${token}` } });
+    return response.json();
+  });
+  expect(JSON.parse(persisted.via_points_json)).toHaveLength(1);
+  expect(JSON.parse(persisted.via_points_json)[0].source).toBe("openstreetmap_reference");
+  const missionCard = page.locator('[data-mission-card="MS-PLACE-QA-01"]');
+  await missionCard.locator("[data-check]").click();
+  await expect.poll(() => page.locator("#resultBadge").innerText()).toMatch(/pass|warning/);
+  await expect(page.locator("#resultContent")).toContainText("未接入具备来源、许可与覆盖审计的建筑障碍物数据");
+  await expect(page.locator("#resultContent")).toContainText("合成演示数据，不可用于净空结论");
+  await missionCard.locator("[data-plan]").click();
+  await expect.poll(() => page.evaluate(() => window.lpMap.adapter.context.selectedRoute?.points?.length || 0)).toBe(3);
+  await expect.poll(() => page.evaluate(() => window.lpMap.adapter.context.selectedRoute?.name)).toBe("主航线-参考点规划");
+  const planned = await page.evaluate(() => window.lpMap.adapter.context.selectedRoute.points);
+  expect(Number(planned[1][0])).toBe(Number(JSON.parse(persisted.via_points_json)[0].longitude));
+  expect(Number(planned[1][1])).toBe(Number(JSON.parse(persisted.via_points_json)[0].latitude));
+});
+
+test("public elevation profile is attributed and shows explicit upstream failures", async ({ page }) => {
+  let failUpstream = false;
+  await page.route("**/api/missions/*/elevation-profile", (route) => {
+    if (failUpstream) return route.fulfill({ status: 503, json: { code: "ELEVATION_SERVICE_UNAVAILABLE", message: "公开高程服务暂不可用" } });
+    return route.fulfill({ json: {
+      available: true,
+      samples: [
+        { longitude: 107.74, latitude: 30.64, elevation_m: 440 },
+        { longitude: 107.76, latitude: 30.65, elevation_m: 458 },
+        { longitude: 107.78, latitude: 30.66, elevation_m: 451 },
+      ],
+      source: "Open-Meteo Elevation API",
+      source_url: "https://open-meteo.com/en/docs/elevation-api",
+      vertical_datum: "not provided",
+      data_boundary: "public reference only",
+      usage_terms: "商业部署前需核验并取得对应商业许可",
+    } });
+  });
+  await page.goto("/?map=maplibre");
+  if (await page.locator("#loginGate").isVisible()) {
+    await page.locator("#loginForm input[name='username']").fill("admin");
+    await page.locator("#loginForm input[name='password']").fill(process.env.E2E_PASSWORD || "admin123");
+    await page.locator("#loginForm button[type='submit']").click();
+  }
+  await expect(page.locator("#missionList [data-select-mission][aria-pressed='true']")).toBeVisible();
+  await page.locator("#queryElevationProfile").click();
+  await expect(page.locator("#elevationProfile")).toContainText("Open-Meteo Elevation API");
+  await expect(page.locator("#elevationProfile .elevation-chart-sample")).toHaveCount(3);
+  await expect(page.locator("#elevationProfile")).toContainText("不用于安全放行");
+  await expect(page.locator("#elevationProfile")).toContainText("商业部署前需核验并取得对应商业许可");
+  await page.screenshot({ path: screenshot("public-elevation-profile-1366x768.png"), fullPage: false });
+  failUpstream = true;
+  await page.locator("#queryElevationProfile").click();
+  await expect(page.locator("#elevationProfile")).toContainText("公开高程服务暂不可用");
+  await expect(page.locator("#elevationProfile")).toContainText("合成演示数据");
+});
+
 test("configured local vector style is selected without duplicating fallback OSM roads", async ({ page }) => {
   await page.route("**/api/map/config", (route) => route.fulfill({ json: { provider: "OpenMapTiles", style_url: "http://127.0.0.1:8890/test-openmaptiles-style.json" } }));
   await page.route("**/test-openmaptiles-style.json", (route) => route.fulfill({
@@ -238,6 +336,28 @@ test("live OpenFreeMap style renders real Liangping vector tiles", async ({ page
   await expect.poll(() => page.evaluate(() => window.lpMap.adapter.map.areTilesLoaded()), { timeout: 20_000 }).toBeTruthy();
   const renderedFeatureCount = await page.evaluate(() => window.lpMap.adapter.map.queryRenderedFeatures().length);
   expect(renderedFeatureCount).toBeGreaterThan(20);
+  const buildingLayerIds = await page.evaluate(() => window.lpMap.adapter.map.getStyle().layers.filter((layer) => layer["source-layer"] === "building" || layer.id === "building" || layer.id === "building-3d").map((layer) => layer.id));
+  expect(buildingLayerIds).toContain("building");
+  const buildingHit = await page.evaluate(async () => {
+    const map = window.lpMap.adapter.map;
+    const layers = map.getStyle().layers.filter((layer) => layer["source-layer"] === "building" || layer.id === "building" || layer.id === "building-3d").map((layer) => layer.id);
+    map.jumpTo({ center: [107.758, 30.646], zoom: 16 });
+    await new Promise((resolve) => map.once("idle", resolve));
+    const canvas = map.getCanvas();
+    for (let y = 12; y < canvas.height; y += 18) for (let x = 12; x < canvas.width; x += 18) {
+      const feature = map.queryRenderedFeatures([x, y], { layers }).find((item) => item.geometry?.type === "Polygon" || item.geometry?.type === "MultiPolygon");
+      if (feature) {
+        const bounds = canvas.getBoundingClientRect();
+        return { id: feature.id, properties: feature.properties, screenX: bounds.left + x, screenY: bounds.top + y };
+      }
+    }
+    return null;
+  });
+  expect(buildingHit).not.toBeNull();
+  await page.mouse.click(buildingHit.screenX, buildingHit.screenY);
+  await expect(page.locator("#resultBadge")).toContainText("建筑轮廓");
+  await expect(page.locator("#resultContent")).toContainText("OpenMapTiles / OpenStreetMap");
+  await expect(page.locator("#resultContent")).toContainText("不代表完整建筑障碍库");
   const styleName = new URL(process.env.LP_MAP_STYLE_URL).pathname.split("/").at(-1).replace(/[^a-z0-9-]/gi, "");
   await page.screenshot({ path: screenshot(`maplibre-openfreemap-${styleName}-live-1366x768.png`), fullPage: false });
   expect(pageErrors).toEqual([]);

@@ -1,15 +1,17 @@
 import json
+import hashlib
 import sys
 import tempfile
 import unittest
 from contextlib import contextmanager
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
 import db as db_module  # noqa: E402
 from db import connect, database_capabilities, database_config, hash_password, init_db, session, sqlite_path_from_url, verify_password  # noqa: E402
 import server as server_module  # noqa: E402
-from server import ApiError, validate_mission, Handler, normalize_time_window, windows_overlap, route_paths_intersect, telemetry_track_csv  # noqa: E402
+from server import ApiError, validate_mission, Handler, normalize_time_window, windows_overlap, route_paths_intersect, route_data_quality, telemetry_track_csv  # noqa: E402
 from repository import PostgresStorage, SQLiteStorage, build_storage  # noqa: E402
 from spatial_repository import INTERSECTION_SQL  # noqa: E402
 from telemetry import TelemetryError, normalize_telemetry, runtime_alerts  # noqa: E402
@@ -109,7 +111,29 @@ class ValidationTests(unittest.TestCase):
         return {"id":"MS-TEST-001","name":"测试任务","vehicle_id":"UAV-LP-001","route_name":"R-TEST","start_lng":107.74,"start_lat":30.64,"end_lng":107.78,"end_lat":30.66,"planned_altitude":120}
 
     def test_valid_mission(self):
-        self.assertEqual(validate_mission(self.valid())["planned_altitude"], 120.0)
+        result = validate_mission(self.valid())
+        self.assertEqual(result["planned_altitude"], 120.0)
+        self.assertEqual(json.loads(result["via_points_json"]), [])
+
+    def test_normalizes_mission_via_points(self):
+        payload = self.valid()
+        payload["via_points"] = [{"name":"参考点A","longitude":"107.75","latitude":"30.65","source":"openstreetmap_reference","source_id":"way-1"}]
+        result = validate_mission(payload)
+        self.assertEqual(json.loads(result["via_points_json"]), [{"name":"参考点A","longitude":107.75,"latitude":30.65,"source":"openstreetmap_reference","source_id":"way-1"}])
+
+    def test_rejects_invalid_mission_via_points(self):
+        payload = self.valid(); payload["via_points"] = "{invalid"
+        with self.assertRaises(ApiError) as context:
+            validate_mission(payload)
+        self.assertEqual(context.exception.code, "INVALID_VIA_POINTS")
+        payload = self.valid(); payload["via_points"] = [{"longitude":120,"latitude":30}]
+        with self.assertRaises(ApiError) as context:
+            validate_mission(payload)
+        self.assertEqual(context.exception.code, "OUT_OF_DEMO_AREA")
+        payload = self.valid(); payload["via_points"] = [{"longitude":107.7,"latitude":30.6}] * 13
+        with self.assertRaises(ApiError) as context:
+            validate_mission(payload)
+        self.assertEqual(context.exception.code, "INVALID_VIA_POINTS")
 
     def test_normalizes_and_validates_time_window(self):
         payload = self.valid()
@@ -133,6 +157,44 @@ class ValidationTests(unittest.TestCase):
     def test_route_path_intersection_detects_crossing(self):
         self.assertTrue(route_paths_intersect([[0, 0, 100], [1, 1, 100]], [[0, 1, 100], [1, 0, 100]]))
         self.assertFalse(route_paths_intersect([[0, 0, 100], [1, 0, 100]], [[0, 1, 100], [1, 1, 100]]))
+
+    def test_route_data_quality_never_promotes_synthetic_or_unregistered_inputs(self):
+        quality = route_data_quality()
+        self.assertEqual(quality["terrain"], "synthetic_demo")
+        self.assertFalse(quality["terrain_verified"])
+        self.assertEqual(quality["building_obstacles"], "not_integrated")
+        self.assertFalse(quality["building_obstacles_verified"])
+        self.assertTrue(quality["review_required"])
+        self.assertFalse(quality["flight_safety_release"])
+
+    def test_route_data_quality_requires_provenance_manifest_and_never_grants_clearance(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            reference = root / "data" / "reference"
+            reference.mkdir(parents=True)
+            dem_bytes = b"public dem grid"
+            building_bytes = b"public building features"
+            (reference / "dem-grid.tif").write_bytes(dem_bytes)
+            (reference / "buildings.geojson").write_bytes(building_bytes)
+            common = {"verified": True, "coverage_bbox": [107.4, 30.3, 108.0, 31.0], "acquired_at": "2026-10-19", "coordinate_reference": "EPSG:4326"}
+            dem_manifest = {**common, "source_url": "https://data.example/dem", "license": "public", "data_file": "dem-grid.tif", "sha256": hashlib.sha256(dem_bytes).hexdigest()}
+            building_manifest = {**common, "source_url": "https://data.example/buildings", "license": "ODbL-1.0", "data_file": "buildings.geojson", "sha256": hashlib.sha256(building_bytes).hexdigest()}
+            (reference / "dem.manifest.json").write_text(json.dumps(dem_manifest), encoding="utf-8")
+            building_manifest_path = reference / "buildings.manifest.json"
+            building_manifest_path.write_text(json.dumps(building_manifest), encoding="utf-8")
+            dem_grid = root / "dem.json"
+            dem_grid.write_text(json.dumps({"metadata": {"source": "public_reference"}}), encoding="utf-8")
+            with patch.object(server_module, "ROOT", root), patch.object(server_module, "DEM_GRID", dem_grid):
+                quality = route_data_quality()
+                self.assertTrue(quality["building_obstacles_verified"])
+                building_manifest["data_file"] = "../../outside.geojson"
+                building_manifest_path.write_text(json.dumps(building_manifest), encoding="utf-8")
+                tampered = route_data_quality()
+        self.assertTrue(quality["terrain_verified"])
+        self.assertTrue(quality["building_obstacles_verified"])
+        self.assertFalse(quality["review_required"])
+        self.assertFalse(quality["flight_safety_release"])
+        self.assertFalse(tampered["building_obstacles_verified"])
 
     def test_rejects_excessive_altitude(self):
         payload = self.valid()

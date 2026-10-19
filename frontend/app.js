@@ -4,6 +4,7 @@ let selectedRoute = null;
 let selectedMissionId = null;
 let selectedMapObject = null;
 let currentRole = "admin";
+let missionViaPoints = [];
 const trackReplay = { missionId: null, samples: [], index: 0, playing: false, timer: null, message: "请选择任务" };
 const apiFetch = (url, options = {}) => { options.headers = { ...(options.headers || {}), ...(localStorage.getItem("lp_token") ? { Authorization: `Bearer ${localStorage.getItem("lp_token")}` } : {}) }; return fetch(url, options); };
 
@@ -30,13 +31,21 @@ function renderSpatialGeometry(feature) {
 function displayMapObject(type, value) {
   selectedMapObject = type === "vehicle" ? { type, id: value.id } : { type, feature: value };
   const properties = type === "vehicle" ? value : value.properties || {};
-  const title = type === "vehicle" ? (value.name || value.id) : (properties.name || properties.point_id || "空间对象");
+  const isBuilding = type === "building";
+  const title = type === "vehicle" ? (value.name || value.id) : (properties.name || properties.point_id || (isBuilding ? `建筑轮廓 · ${value.id || "未命名"}` : "空间对象"));
   const isRisk = type === "spatial" && ["obstacle", "hazard", "restricted"].includes(properties.asset_type);
   const detailRows = type === "vehicle" ? [
     ["对象类型", "飞行器"], ["运行状态", value.status_label || value.status || "未提供"],
     ["高度", value.altitude != null ? `${value.altitude} m · 合成演示值` : "未提供"],
     ["电量", value.battery != null ? `${value.battery}% · 合成演示值` : "未提供"],
     ["链路", value.link_status || "未提供"], ["数据时间", value.updated_at || value.telemetry_at || "未提供"], ["数据来源", "合成演示数据"],
+  ] : isBuilding ? [
+    ["对象类型", "矢量建筑轮廓 · 公开参考"],
+    ["建筑高度属性", properties.height != null ? `${properties.height} m · 瓦片属性` : properties["building:height"] != null ? `${properties["building:height"]} m · 瓦片属性` : "未提供"],
+    ["地图挤出高度", properties.render_height != null ? `${properties.render_height} m · 样式渲染值，可能为估算` : "当前要素未提供"],
+    ["楼层数", properties["building:levels"] != null ? `${properties["building:levels"]} 层 · 瓦片属性` : "未提供"],
+    ["数据来源", "OpenMapTiles / OpenStreetMap contributors"],
+    ["判定边界", "底图参考对象；不代表完整建筑障碍库或实测高度，不参与安全放行"],
   ] : [
     ["对象类型", properties.asset_type || "未分类"], ["风险级别", properties.risk_level || (isRisk ? "未提供" : "未标注")],
     ["高度/限制", properties.height_m != null ? `对象高度 ${properties.height_m} m` : properties.min_altitude_m != null || properties.max_altitude_m != null ? `${properties.min_altitude_m ?? "未提供"}-${properties.max_altitude_m ?? "未提供"} m` : "未提供"],
@@ -55,7 +64,7 @@ function displayMapObject(type, value) {
   detailRows.forEach(([label, valueText]) => { const labelNode = document.createElement("span"); labelNode.textContent = label; const valueNode = document.createElement("strong"); valueNode.textContent = valueText; grid.append(labelNode, valueNode); });
   block.append(heading, grid);
   content.replaceChildren(block);
-  $("#resultBadge").textContent = type === "vehicle" ? "飞行器 · 模拟数据" : isRisk ? `风险对象 · ${properties.risk_level || "级别未提供"} · 待核验` : "空间对象 · 参考数据";
+  $("#resultBadge").textContent = type === "vehicle" ? "飞行器 · 模拟数据" : isBuilding ? "建筑轮廓 · 底图参考" : isRisk ? `风险对象 · ${properties.risk_level || "级别未提供"} · 待核验` : "空间对象 · 参考数据";
   renderMap();
 }
 
@@ -82,6 +91,7 @@ function renderMap() {
       replayTrack: trackReplay,
       onVehicleClick: (id) => { const vehicle = platformData.vehicles.find((item) => item.id === id); if (vehicle) displayMapObject("vehicle", vehicle); },
       onSpatialClick: (feature) => { if (feature) displayMapObject("spatial", feature); },
+      onBuildingClick: (feature) => { if (feature) displayMapObject("building", feature); },
     });
     const summary = document.querySelector("#mapMissionSummary");
     if (summary) summary.textContent = mission ? `${mission.id} · ${mission.name} · ${mission.status_label} · ${mission.planned_altitude || "高度未提供"}m` : "暂无任务 · 当前地图仅显示可用空间参考对象";
@@ -232,7 +242,7 @@ function renderDataRegister(data) {
   const rows = [
     ["DEM / 高程", "离线合成网格", "WGS84 · DATA-DEMO · 仅规划演示", "demo"],
     ["空域与限制", "公开参考 / 合成", "来源版本未登记为权威许可", "demo"],
-    ["建筑数据", "未接入", "碰撞与建筑净空不参与判定", "not-ready"],
+    ["建筑数据", "未接入", "在线底图建筑仅作参考；不参与碰撞与净空判定", "not-ready"],
   ];
   rows.forEach(([title, status, note, tone]) => { const row = document.createElement("div"); row.className = `data-register-row ${tone}`; const heading = document.createElement("strong"); heading.textContent = `${title} · ${status}`; const detail = document.createElement("small"); detail.textContent = note; row.append(heading, detail); target.append(row); });
 }
@@ -250,6 +260,7 @@ function selectMission(id) {
   selectedMissionId = id;
   selectedRoute = null;
   selectedMapObject = null;
+  $("#elevationProfile").textContent = "任务已切换；请重新查询该任务高程参考。";
   $("#resultContent").removeAttribute("data-selected-object-type");
   $("#resultContent").removeAttribute("data-selected-object-id");
   document.querySelectorAll("[data-mission-card]").forEach((card) => {
@@ -409,6 +420,127 @@ async function bootstrap() {
   $("#health").textContent = "● 服务正常 · SQLite 数据已加载";
 }
 
+function placeFeatureCoordinates(feature) {
+  const coordinates = [];
+  const visit = (value) => {
+    if (!Array.isArray(value)) return;
+    if (value.length >= 2 && Number.isFinite(Number(value[0])) && Number.isFinite(Number(value[1]))) coordinates.push([Number(value[0]), Number(value[1])]);
+    else value.forEach(visit);
+  };
+  visit(feature.geometry?.coordinates);
+  if (!coordinates.length) return null;
+  return coordinates.length === 1 ? coordinates[0] : [coordinates.reduce((sum, point) => sum + point[0], 0) / coordinates.length, coordinates.reduce((sum, point) => sum + point[1], 0) / coordinates.length];
+}
+
+function searchLocalPlaces(query) {
+  const normalized = query.trim().toLocaleLowerCase();
+  if (normalized.length < 2) return [];
+  const features = window.lpMap?.adapter?.referenceGeographyData || [];
+  const matches = [];
+  for (const feature of features) {
+    const properties = feature.properties || {};
+    const name = String(properties.name || properties["name:zh"] || properties.official_name || "").trim();
+    if (!name.toLocaleLowerCase().includes(normalized)) continue;
+    const coordinates = placeFeatureCoordinates(feature);
+    if (!coordinates || coordinates[0] < 105 || coordinates[0] > 110 || coordinates[1] < 28 || coordinates[1] > 32) continue;
+    matches.push({ feature, name, coordinates, kind: feature.geometry?.type === "Point" ? "点位" : "范围/线状要素中心（近似）" });
+    if (matches.length >= 12) break;
+  }
+  return matches;
+}
+
+function renderPlaceResults(query) {
+  const target = $("#placeSearchResults");
+  target.replaceChildren();
+  if (query.trim().length < 2) { target.textContent = "请输入至少 2 个字符"; return; }
+  const matches = searchLocalPlaces(query);
+  if (!matches.length) { target.textContent = "本地参考数据中没有匹配结果；可继续手动填写坐标。"; return; }
+  matches.forEach((match) => {
+    const row = document.createElement("div"); row.className = "place-search-result";
+    const info = document.createElement("div");
+    const title = document.createElement("strong"); title.textContent = match.name;
+    const meta = document.createElement("small"); meta.textContent = `OSM 公开参考 · ${match.kind} · ${match.coordinates[0].toFixed(6)}, ${match.coordinates[1].toFixed(6)}`;
+    info.append(title, meta);
+    const actions = document.createElement("div"); actions.className = "place-search-actions";
+    const focus = document.createElement("button"); focus.type = "button"; focus.textContent = "定位"; focus.setAttribute("aria-label", `在地图定位：${match.name}`);
+    focus.addEventListener("click", () => { if (!window.lpMap?.focusPoint?.(match.coordinates)) $("#formMessage").textContent = "当前地图不支持地点定位，请手动填写坐标。"; });
+    actions.append(focus);
+    for (const role of ["start", "end"]) {
+      const button = document.createElement("button"); button.type = "button"; button.textContent = role === "start" ? "设为起点" : "设为终点";
+      button.addEventListener("click", () => {
+        const form = $("#missionForm");
+        form.elements[`${role}_lng`].value = match.coordinates[0].toFixed(6);
+        form.elements[`${role}_lat`].value = match.coordinates[1].toFixed(6);
+        $("#formMessage").textContent = `${role === "start" ? "起点" : "终点"}已设为“${match.name}”的参考坐标；请核对位置后再创建任务。`;
+        window.lpMap?.focusPoint?.(match.coordinates);
+      });
+      actions.append(button);
+    }
+    const via = document.createElement("button"); via.type = "button"; via.textContent = "加入途经点";
+    via.addEventListener("click", () => {
+      if (missionViaPoints.length >= 12) { $("#formMessage").textContent = "途经点最多 12 个。"; return; }
+      const sourceId = String(match.feature.id || match.feature.properties?.osm_way_id || "");
+      if (missionViaPoints.some((point) => point.source_id && point.source_id === sourceId)) { $("#formMessage").textContent = "该参考要素已加入途经点。"; return; }
+      missionViaPoints.push({ name: match.name, longitude: match.coordinates[0], latitude: match.coordinates[1], source: "openstreetmap_reference", source_id: sourceId });
+      renderMissionViaPoints();
+      $("#formMessage").textContent = `已添加途经点“${match.name}”；保存任务后会进入航线规划。`;
+    });
+    actions.append(via);
+    row.append(info, actions); target.append(row);
+  });
+}
+
+function renderMissionViaPoints() {
+  const input = $("#missionForm input[name='via_points_json']");
+  const target = $("#missionViaPointList");
+  input.value = JSON.stringify(missionViaPoints);
+  target.replaceChildren();
+  if (!missionViaPoints.length) { target.textContent = "未添加途经点"; return; }
+  missionViaPoints.forEach((point, index) => {
+    const row = document.createElement("div"); row.className = "mission-via-point";
+    const name = document.createElement("span"); name.textContent = `${index + 1}. ${point.name} · ${point.longitude.toFixed(6)}, ${point.latitude.toFixed(6)}`;
+    const remove = document.createElement("button"); remove.type = "button"; remove.textContent = "移除"; remove.setAttribute("aria-label", `移除途经点：${point.name}`);
+    remove.addEventListener("click", () => { missionViaPoints.splice(index, 1); renderMissionViaPoints(); });
+    row.append(name, remove); target.append(row);
+  });
+}
+
+function renderElevationProfile(profile) {
+  const target = $("#elevationProfile");
+  target.replaceChildren();
+  const samples = (profile.samples || []).filter((sample) => Number.isFinite(Number(sample.elevation_m)));
+  if (!profile.available || !samples.length) { target.textContent = "公开服务未返回完整采样。高程数据不足，不能用于净空判断。"; return; }
+  const elevations = samples.map((sample) => Number(sample.elevation_m));
+  const minimum = Math.min(...elevations); const maximum = Math.max(...elevations);
+  const summary = document.createElement("div"); summary.className = "elevation-profile-summary";
+  summary.textContent = `${samples.length} 个沿线采样点 · ${minimum.toFixed(1)}–${maximum.toFixed(1)} m · 垂直基准未声明`;
+  const chart = document.createElement("div"); chart.className = "elevation-chart"; chart.setAttribute("role", "img"); chart.setAttribute("aria-label", `公开参考高程剖面，${samples.length}个采样点，最低${minimum.toFixed(1)}米，最高${maximum.toFixed(1)}米`);
+  samples.forEach((sample, index) => {
+    const bar = document.createElement("span"); bar.className = "elevation-chart-sample";
+    const ratio = maximum === minimum ? 0.5 : (Number(sample.elevation_m) - minimum) / (maximum - minimum);
+    bar.style.height = `${Math.max(14, 18 + ratio * 72)}%`;
+    bar.title = `点 ${index + 1} · ${Number(sample.elevation_m).toFixed(1)} m · ${Number(sample.longitude).toFixed(5)}, ${Number(sample.latitude).toFixed(5)}`;
+    chart.append(bar);
+  });
+  const endpoints = document.createElement("div"); endpoints.className = "elevation-chart-endpoints";
+  const start = document.createElement("span"); start.textContent = `起点 ${elevations[0].toFixed(1)} m`;
+  const end = document.createElement("span"); end.textContent = `终点 ${elevations.at(-1).toFixed(1)} m`;
+  endpoints.append(start, end);
+  const source = document.createElement("a"); source.href = profile.source_url; source.target = "_blank"; source.rel = "noopener noreferrer"; source.textContent = profile.source;
+  const boundary = document.createElement("small"); boundary.className = "elevation-profile-boundary"; boundary.textContent = `${profile.data_boundary}；数据源未声明分辨率/垂直基准，不用于安全放行。${profile.usage_terms ? ` ${profile.usage_terms}` : ""}`;
+  target.append(summary, chart, endpoints, source, boundary);
+}
+
+async function queryElevationProfile() {
+  const target = $("#elevationProfile"); const missionId = selectedMissionId;
+  if (!missionId) { target.textContent = "请先选择任务。"; return; }
+  target.textContent = "正在查询公开高程参考…";
+  const response = await apiFetch(`/api/missions/${encodeURIComponent(missionId)}/elevation-profile`, { cache: "no-store" });
+  const result = await response.json();
+  if (!response.ok) { target.textContent = `${result.message || "公开高程服务不可用"}；现有离线高程仅为合成演示数据。`; return; }
+  renderElevationProfile(result);
+}
+
 const dialog = $("#missionDialog");
 const mapContext = () => ({
   data: platformData,
@@ -424,10 +556,13 @@ const mapContext = () => ({
 $("#mapZoomIn").onclick = () => window.lpMap?.setZoom((window.lpMap.adapter?.map?.getZoom() || window.lpMap.state.zoom || 1) + .5, mapContext());
 $("#mapZoomOut").onclick = () => window.lpMap?.setZoom((window.lpMap.adapter?.map?.getZoom() || window.lpMap.state.zoom || 1) - .5, mapContext());
 $("#mapReset").onclick = () => window.lpMap?.reset(mapContext());
+$("#queryElevationProfile").onclick = () => { queryElevationProfile().catch(() => { $("#elevationProfile").textContent = "公开高程服务暂不可用；现有离线高程仅为合成演示数据。"; }); };
 $("#altitudeFilter").onchange = (event) => { const labels = { all: "全部高度", "0-60": "0–60 m", "60-120": "60–120 m", "120-300": "120–300 m", "300+": "300 m 以上" }; const readout = $("#altitudeLayerReadout"); if (readout) readout.textContent = `当前高度层：${labels[event.target.value] || "未知"}`; window.lpMap?.setFilters({ altitude: event.target.value }, mapContext()); };
 $("#openFacilityManagement").onclick = () => $("#facilityManagementDialog").showModal();
 $("#closeFacilityManagement").onclick = () => $("#facilityManagementDialog").close();
-$("#newMission").onclick = () => dialog.showModal();
+$("#newMission").onclick = () => { missionViaPoints = []; renderMissionViaPoints(); $("#placeSearchInput").value = ""; $("#placeSearchResults").replaceChildren(); $("#formMessage").textContent = ""; dialog.showModal(); };
+$("#placeSearchSubmit").onclick = () => renderPlaceResults($("#placeSearchInput").value);
+$("#placeSearchInput").addEventListener("keydown", (event) => { if (event.key === "Enter") { event.preventDefault(); renderPlaceResults(event.currentTarget.value); } });
 $("#closeDialog").onclick = () => dialog.close();
 $("#cancelDialog").onclick = () => dialog.close();
 $("#missionForm").onsubmit = async (event) => {

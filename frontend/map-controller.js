@@ -9,7 +9,9 @@
   function vehicleForMission(data, mission) { return mission ? (data.vehicles || []).find((item) => item.id === mission.vehicle_id) || null : null; }
   function routePointsForMission(data, mission, selectedRoute) {
     const vehicle = vehicleForMission(data, mission);
-    const fallback = [[Number(mission?.start_lng), Number(mission?.start_lat)], vehicle ? [Number(vehicle.longitude), Number(vehicle.latitude)] : null, [Number(mission?.end_lng), Number(mission?.end_lat)]].filter(validPoint);
+    let viaPoints = [];
+    try { viaPoints = JSON.parse(mission?.via_points_json || "[]").map((point) => [Number(point.longitude), Number(point.latitude)]).filter(validPoint); } catch { viaPoints = []; }
+    const fallback = [[Number(mission?.start_lng), Number(mission?.start_lat)], ...viaPoints, vehicle ? [Number(vehicle.longitude), Number(vehicle.latitude)] : null, [Number(mission?.end_lng), Number(mission?.end_lat)]].filter(validPoint);
     return (selectedRoute?.points || []).filter(validPoint).length >= 2 ? selectedRoute.points.filter(validPoint) : fallback;
   }
   function buildMissionModel(data, selectedMissionId, selectedRoute, replayTrack) {

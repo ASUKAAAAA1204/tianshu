@@ -30,6 +30,7 @@ MIGRATIONS = [
     (9, "airspace cells", "CREATE TABLE IF NOT EXISTS airspace_cells (cell_id TEXT PRIMARY KEY, geometry_json TEXT NOT NULL, min_altitude_m REAL, max_altitude_m REAL, valid_from TEXT, valid_to TEXT, status TEXT NOT NULL DEFAULT 'published', risk_level TEXT NOT NULL DEFAULT 'low', rule_version TEXT, data_version TEXT, source_kind TEXT NOT NULL DEFAULT 'synthetic_demo', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
     (10, "facilities master data", "CREATE TABLE IF NOT EXISTS facilities (facility_id TEXT PRIMARY KEY, facility_type TEXT NOT NULL, name TEXT NOT NULL, longitude REAL NOT NULL, latitude REAL NOT NULL, elevation_m REAL, capacity INTEGER, service_radius_m REAL, opening_hours TEXT, compatible_vehicles_json TEXT NOT NULL DEFAULT '[]', status TEXT NOT NULL DEFAULT 'active', source_kind TEXT NOT NULL DEFAULT 'synthetic_demo', data_version TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
     (11, "route decisions", "CREATE TABLE IF NOT EXISTS route_decisions (id INTEGER PRIMARY KEY AUTOINCREMENT, mission_id TEXT NOT NULL REFERENCES missions(id), route_id INTEGER NOT NULL REFERENCES routes(id), decision TEXT NOT NULL CHECK (decision IN ('adopted','returned','revoked')), reason TEXT, actor_username TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
+    (12, "mission via points", "ALTER TABLE missions ADD COLUMN via_points_json TEXT NOT NULL DEFAULT '[]'"),
 ]
 
 
@@ -74,6 +75,7 @@ CREATE TABLE IF NOT EXISTS missions (
     planned_altitude REAL NOT NULL,
     time_window_start TEXT,
     time_window_end TEXT,
+    via_points_json TEXT NOT NULL DEFAULT '[]',
     status TEXT NOT NULL,
     status_label TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP

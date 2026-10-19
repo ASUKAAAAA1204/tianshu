@@ -9,6 +9,7 @@
     state: adapter.state,
     render: (context) => adapter.render(context),
     setZoom: (value, context) => adapter.setZoom(value, context),
+    focusPoint: (coordinates) => adapter.focusPoint(coordinates),
     reset: (context) => adapter.reset(context),
     toggleDem: (context) => adapter.toggleDem(context),
     setFilters: (filters, context) => adapter.setFilters(filters, context),

@@ -30,7 +30,9 @@
 
   function missionPoints(data, mission, selectedRoute) {
     const vehicle = vehicleForMission(data, mission);
-    const fallback = [[Number(mission?.start_lng), Number(mission?.start_lat)], vehicle ? [Number(vehicle.longitude), Number(vehicle.latitude)] : null, [Number(mission?.end_lng), Number(mission?.end_lat)]].filter(validPoint);
+    let viaPoints = [];
+    try { viaPoints = JSON.parse(mission?.via_points_json || "[]").map((point) => [Number(point.longitude), Number(point.latitude)]).filter(validPoint); } catch { viaPoints = []; }
+    const fallback = [[Number(mission?.start_lng), Number(mission?.start_lat)], ...viaPoints, vehicle ? [Number(vehicle.longitude), Number(vehicle.latitude)] : null, [Number(mission?.end_lng), Number(mission?.end_lat)]].filter(validPoint);
     const selected = (selectedRoute?.points || []).filter(validPoint);
     return selected.length >= 2 ? selected : fallback;
   }
@@ -109,6 +111,7 @@
       this.resizeObserver = null;
       this.referenceGeographyLoaded = false;
       this.referenceGeographyLoading = null;
+      this.referenceGeographyData = [];
       this.styleMode = "local-reference";
       this.tileStyleState = "not-configured";
       this.tileProvider = "OpenMapTiles";
@@ -175,6 +178,7 @@
         this.map.on("mousemove", (event) => { const targetCoords = document.querySelector("#mapCoords"); if (targetCoords) targetCoords.textContent = `坐标 ${Number(event.lngLat.lng).toFixed(5)}, ${Number(event.lngLat.lat).toFixed(5)}`; });
         this.map.on("click", "lp-aircraft", (event) => { const id = event.features?.[0]?.properties?.id; if (id) this.context?.onVehicleClick?.(id); });
         ["lp-airspace-fill", "lp-facilities", "lp-risks"].forEach((layer) => this.map.on("click", layer, (event) => { const feature = event.features?.[0]; if (feature) this.context?.onSpatialClick?.(feature); }));
+        this.map.on("click", (event) => this.handleBuildingClick(event));
         return this.map;
       }).catch((error) => {
         this.fail(error);
@@ -186,6 +190,16 @@
 
     setStatus(value) { const node = document.querySelector("#mapModeStatus"); if (node) node.textContent = `MapLibre · ${value}`; }
     fail(error) { console.error("MapLibre adapter failed", error); this.failed = true; this.setStatus("fallback"); if (this.fallbackController && this.context) this.fallbackController.render(this.context); }
+
+    handleBuildingClick(event) {
+      if (!this.map || event.originalEvent?.target?.closest?.(".maplibre-marker")) return;
+      const layers = (this.map.getStyle()?.layers || []).filter((layer) => layer["source-layer"] === "building" || layer.id === "building" || layer.id === "building-3d").map((layer) => layer.id);
+      if (!layers.length) return;
+      if (this.map.queryRenderedFeatures(event.point, { layers: ["lp-airspace-fill", "lp-facilities", "lp-risks", "lp-aircraft"].filter((id) => this.map.getLayer(id)) }).length) return;
+      const feature = this.map.queryRenderedFeatures(event.point, { layers }).find((item) => item.geometry?.type === "Polygon" || item.geometry?.type === "MultiPolygon");
+      if (!feature) return;
+      this.context?.onBuildingClick?.({ ...feature, properties: { ...feature.properties, source_kind: "openmaptiles_building_reference" } });
+    }
 
     buildData() {
       const data = this.context?.data || {};
@@ -202,7 +216,7 @@
       const candidateById = new Map(candidates.map((feature) => [objectKey(feature), feature]));
       this.state.selectedWaypointIds = this.state.selectedWaypointIds.filter((id) => candidateById.has(id));
       const chosenWaypoints = this.state.selectedWaypointIds.map((id) => candidateById.get(id)).filter(Boolean).map((feature) => feature.geometry.coordinates.map(Number));
-      const primary = chosenWaypoints.length >= 1 && originalRoute.length >= 2 ? smoothRoute([originalRoute[0], ...chosenWaypoints, originalRoute[originalRoute.length - 1]]) : originalRoute;
+      const primary = chosenWaypoints.length >= 1 && originalRoute.length >= 2 ? smoothRoute([...originalRoute.slice(0, -1), ...chosenWaypoints, originalRoute[originalRoute.length - 1]]) : originalRoute;
       const actual = replaySamples.length ? replaySamples.slice(0, replayIndex + 1).filter((sample) => validPoint([sample.longitude, sample.latitude])).map((sample) => [Number(sample.longitude), Number(sample.latitude)]) : vehicle && validPoint([vehicle.longitude, vehicle.latitude]) ? [primary[0], [Number(vehicle.longitude), Number(vehicle.latitude)]] : [];
       const relevant = spatial.filter((feature) => {
         const type = feature.properties?.asset_type;
@@ -283,6 +297,7 @@
         .then((geojson) => {
           if (geojson?.type !== "FeatureCollection" || !Array.isArray(geojson.features) || !geojson.features.length) throw new Error("REFERENCE_GEOJSON_INVALID");
           this.map?.getSource("lp-geography")?.setData(geojson);
+          this.referenceGeographyData = Array.isArray(geojson.features) ? geojson.features : [];
           this.referenceGeographyLoaded = true;
           this.referenceGeographyLoading = null;
           if (this.context) this.syncSources();
@@ -393,6 +408,7 @@
       this.ensureMap().then(() => { this.map?.resize(); this.syncSources(); }).catch((error) => this.fail(error));
     }
     setZoom(value, context) { this.context = context; this.state.zoom = Math.max(0.8, Math.min(18, value)); this.map?.zoomTo(this.state.zoom, { duration: 120 }); this.render(context); }
+    focusPoint(coordinates) { if (!this.map || !validPoint(coordinates)) return false; this.userMoved = true; this.map.easeTo({ center: [Number(coordinates[0]), Number(coordinates[1])], zoom: Math.max(13, this.map.getZoom()), duration: 450 }); return true; }
     reset(context) { this.context = context; this.userMoved = false; this.didFitMission = false; this.map?.setPitch(0); this.render(context); }
     toggleDem(context) { this.context = context; this.state.showDem = !this.state.showDem; this.render(context); return this.state.showDem; }
     setFilters(filters, context) { this.context = context; this.state.filters = { ...this.state.filters, ...filters }; this.render(context); }

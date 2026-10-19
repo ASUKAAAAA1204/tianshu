@@ -25,6 +25,7 @@ from terrain import route_terrain_metrics
 from repository import build_storage
 from telemetry import TelemetryError, normalize_telemetry, runtime_alerts
 from map_adapter import build_map_feature_collection
+from public_elevation import ElevationProviderError, fetch_elevations, sample_route
 from versioning import ENGINE_VERSION, traceability
 
 
@@ -88,6 +89,44 @@ def route_paths_intersect(left_points, right_points):
             if segments_intersect(tuple(left_a[:2]), tuple(left_b[:2]), tuple(right_a[:2]), tuple(right_b[:2])):
                 return True
     return False
+
+
+def route_data_quality():
+    """Return explicit coverage limits; demo-only assets never imply safety clearance."""
+    try:
+        dem_metadata = json.loads(DEM_GRID.read_text(encoding="utf-8")).get("metadata", {})
+    except (OSError, json.JSONDecodeError):
+        dem_metadata = {}
+    dem_manifest = ROOT / "data" / "reference" / "dem.manifest.json"
+    building_manifest = ROOT / "data" / "reference" / "buildings.manifest.json"
+
+    def manifest_verified(path):
+        try:
+            manifest = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return False
+        required = ("source_url", "license", "coverage_bbox", "acquired_at", "coordinate_reference", "data_file", "sha256")
+        if manifest.get("verified") is not True or not all(manifest.get(key) for key in required):
+            return False
+        data_root = path.parent.resolve()
+        data_path = (data_root / manifest["data_file"]).resolve()
+        try:
+            data_path.relative_to(data_root)
+            return data_path.is_file() and hashlib.sha256(data_path.read_bytes()).hexdigest() == str(manifest["sha256"]).lower()
+        except (OSError, ValueError):
+            return False
+
+    dem_verified = manifest_verified(dem_manifest)
+    buildings_verified = manifest_verified(building_manifest)
+    return {
+        "terrain": "verified_reference" if dem_verified else ("synthetic_demo" if dem_metadata.get("source") == "synthetic_demo" else "unverified"),
+        "terrain_verified": dem_verified,
+        "building_obstacles": "verified_reference" if buildings_verified else "not_integrated",
+        "building_obstacles_verified": buildings_verified,
+        "flight_safety_release": False,
+        "review_required": not (dem_verified and buildings_verified),
+        "boundary": "底图建筑与合成DEM不能作为完整障碍物/地形证据；未发现已知冲突不代表无风险或可飞",
+    }
 
 
 def insert_returning_id(db, query, params=()):
@@ -365,6 +404,30 @@ class Handler(BaseHTTPRequestHandler):
                 with session() as db:
                     self._json(rows(db, sql, tuple(params)))
                 return
+            elevation_profile_match = re.fullmatch(r"/api/missions/([^/]+)/elevation-profile", route)
+            if elevation_profile_match:
+                mission_id = elevation_profile_match.group(1)
+                with session() as db:
+                    mission = db.execute("SELECT * FROM missions WHERE id=?", (mission_id,)).fetchone()
+                    if not mission:
+                        raise ApiError(404, "MISSION_NOT_FOUND", "任务不存在")
+                    route_row = db.execute("SELECT points_json FROM routes WHERE mission_id=? ORDER BY id DESC LIMIT 1", (mission_id,)).fetchone()
+                    if route_row:
+                        try:
+                            route_points = [[float(point[0]), float(point[1])] for point in json.loads(route_row["points_json"])]
+                        except (TypeError, ValueError, IndexError, json.JSONDecodeError) as error:
+                            raise ApiError(422, "INVALID_ROUTE_GEOMETRY", "已保存航线坐标无法读取") from error
+                    else:
+                        try:
+                            vias = json.loads(mission["via_points_json"] or "[]")
+                        except (TypeError, json.JSONDecodeError):
+                            vias = []
+                        route_points = [[float(mission["start_lng"]), float(mission["start_lat"])], *[[float(point["longitude"]), float(point["latitude"])] for point in vias], [float(mission["end_lng"]), float(mission["end_lat"])]]
+                try:
+                    self._json(fetch_elevations(sample_route(route_points)))
+                except ElevationProviderError as error:
+                    raise ApiError(503, error.code, error.message) from error
+                return
             with session() as db:
                 resources = {
                     "/api/layers": "SELECT * FROM layers ORDER BY id",
@@ -396,12 +459,6 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 if route == "/api/map/features":
                     self._json(build_map_feature_collection(db, SPATIAL_ASSETS))
-                    return
-                if route == "/api/elevation/grid":
-                    try:
-                        self._json(json.loads(DEM_GRID.read_text(encoding="utf-8")))
-                    except (OSError, json.JSONDecodeError):
-                        raise ApiError(503, "DEM_UNAVAILABLE", "梁平高程网格尚未准备")
                     return
                 if route == "/api/elevation/grid":
                     try:
@@ -610,8 +667,8 @@ class Handler(BaseHTTPRequestHandler):
                     raise ApiError(422, "VEHICLE_NOT_FOUND", "所选飞行器不存在")
                 try:
                     db.execute(
-                        """INSERT INTO missions(id,name,vehicle_id,route_name,start_lng,start_lat,end_lng,end_lat,planned_altitude,time_window_start,time_window_end,status,status_label)
-                        VALUES(:id,:name,:vehicle_id,:route_name,:start_lng,:start_lat,:end_lng,:end_lat,:planned_altitude,:time_window_start,:time_window_end,'planned','已计划')""",
+                        """INSERT INTO missions(id,name,vehicle_id,route_name,start_lng,start_lat,end_lng,end_lat,planned_altitude,time_window_start,time_window_end,via_points_json,status,status_label)
+                        VALUES(:id,:name,:vehicle_id,:route_name,:start_lng,:start_lat,:end_lng,:end_lat,:planned_altitude,:time_window_start,:time_window_end,:via_points_json,'planned','已计划')""",
                         payload,
                     )
                 except sqlite3.IntegrityError:
@@ -735,9 +792,12 @@ class Handler(BaseHTTPRequestHandler):
             if mission["planned_altitude"] > 1200:
                 items.append({"rule_code":"R-002","level":"hard","message":"计划高度超过1200米","action":"调整飞行高度"})
             start, end = (mission["start_lng"], mission["start_lat"]), (mission["end_lng"], mission["end_lat"])
+            via_points = json.loads(mission["via_points_json"] or "[]")
+            route_points = [start, *[(point["longitude"], point["latitude"]) for point in via_points], end]
+            segments = list(zip(route_points, route_points[1:]))
             for layer in db.execute("SELECT * FROM layers WHERE status='published'").fetchall():
                 geometry = json.loads(layer["geometry_json"])
-                if segment_intersects_polygon(start, end, geometry):
+                if any(segment_intersects_polygon(left, right, geometry) for left, right in segments):
                     level = "hard" if layer["level"] == "hard" else "soft"
                     items.append({"rule_code":"R-001" if level == "hard" else "R-003","level":level,"message":f"航线穿越{layer['name']}","action":"调整航线" if level == "hard" else "人工确认后继续"})
             facility_check = facility_reachability(db, mission)
@@ -745,13 +805,18 @@ class Handler(BaseHTTPRequestHandler):
                 items.append({"rule_code": "F-001", "level": "hard", "message": "起点没有满足机型兼容和服务半径的可用设施", "action": "调整起点或启用备降设施"})
             if not facility_check["end"]["reachable"]:
                 items.append({"rule_code": "F-002", "level": "hard", "message": "终点没有满足机型兼容和服务半径的可用设施", "action": "调整终点或启用备降设施"})
+            data_quality = route_data_quality()
+            if not data_quality["building_obstacles_verified"]:
+                items.append({"rule_code": "D-001", "level": "soft", "message": "未接入具备来源、许可与覆盖审计的建筑障碍物数据；底图建筑仅供参考", "action": "人工核验并补充可审计的障碍物数据"})
+            if not data_quality["terrain_verified"]:
+                items.append({"rule_code": "D-002", "level": "soft", "message": "真实地形数据尚未核验；当前DEM为合成演示数据，不可用于净空结论", "action": "人工复核地形与高程基准"})
             altitude = float(mission["planned_altitude"])
             for cell in db.execute("SELECT * FROM airspace_cells WHERE status='published'").fetchall():
                 try:
                     geometry = json.loads(cell["geometry_json"])
                 except (TypeError, json.JSONDecodeError):
                     continue
-                spatial_hit = segment_intersects_polygon(start, end, geometry)
+                spatial_hit = any(segment_intersects_polygon(left, right, geometry) for left, right in segments)
                 altitude_hit = (cell["min_altitude_m"] is None or altitude >= float(cell["min_altitude_m"])) and (cell["max_altitude_m"] is None or altitude <= float(cell["max_altitude_m"]))
                 temporal_hit = windows_overlap(mission["time_window_start"], mission["time_window_end"], cell["valid_from"], cell["valid_to"])
                 if spatial_hit and altitude_hit and (temporal_hit or not cell["valid_from"]):
@@ -759,10 +824,10 @@ class Handler(BaseHTTPRequestHandler):
                     items.append({"rule_code": "A-001", "level": level, "message": f"航线进入四维空域单元 {cell['cell_id']}（{cell['min_altitude_m']}-{cell['max_altitude_m']}m）", "action": "调整高度/航线或人工确认", "cell_id": cell["cell_id"], "rule_version": cell["rule_version"], "data_version": cell["data_version"]})
             decision = "blocked" if any(x["level"] == "hard" for x in items) else ("warning" if items else "pass")
             risk = "high" if decision == "blocked" else ("medium" if items else "low")
-            detail = {"decision": decision, "risk_level": risk, "facility": facility_check, "traceability": traceability()}
+            detail = {"decision": decision, "risk_level": risk, "facility": facility_check, "data_quality": data_quality, "traceability": traceability()}
             db.execute("INSERT INTO mission_checks(mission_id,decision,risk_level,items_json) VALUES(?,?,?,?)", (mission_id, decision, risk, json.dumps({"items": items, **detail}, ensure_ascii=False)))
             db.execute("INSERT INTO audit_logs(action,object_type,object_id,detail_json) VALUES(?,?,?,?)", ("check", "mission", mission_id, json.dumps(detail, ensure_ascii=False)))
-            self._json({"mission_id":mission_id,"decision":decision,"risk_level":risk,"items":items,"facility":facility_check,"traceability":traceability()})
+            self._json({"mission_id":mission_id,"decision":decision,"risk_level":risk,"items":items,"facility":facility_check,"data_quality":data_quality,"traceability":traceability()})
 
     def _plan_route(self, mission_id):
         with session() as db:
@@ -773,12 +838,15 @@ class Handler(BaseHTTPRequestHandler):
                 raise ApiError(409, "CHECK_REQUIRED", "请先执行规则检查")
             if latest["decision"] == "blocked":
                 raise ApiError(409, "ROUTE_BLOCKED", "规则检查未通过，不能生成航线")
-            points = [[mission["start_lng"], mission["start_lat"], mission["planned_altitude"]], [mission["end_lng"], mission["end_lat"], mission["planned_altitude"]]]
-            distance = haversine(points[0][0], points[0][1], points[1][0], points[1][1])
+            via_points = json.loads(mission["via_points_json"] or "[]")
+            coordinates = [[mission["start_lng"], mission["start_lat"]], *[[point["longitude"], point["latitude"]] for point in via_points], [mission["end_lng"], mission["end_lat"]]]
+            points = [[point[0], point[1], mission["planned_altitude"]] for point in coordinates]
+            distance = sum(haversine(left[0], left[1], right[0], right[1]) for left, right in zip(points, points[1:]))
             duration = distance / 12
-            route_id = insert_returning_id(db, "INSERT INTO routes(mission_id,name,points_json,distance_m,duration_s,risk_level) VALUES(?,?,?,?,?,?)", (mission_id, "主航线-直连", json.dumps(points), distance, duration, "medium" if latest["decision"] == "warning" else "low"))
+            route_name = "主航线-参考点规划" if via_points else "主航线-直连"
+            route_id = insert_returning_id(db, "INSERT INTO routes(mission_id,name,points_json,distance_m,duration_s,risk_level) VALUES(?,?,?,?,?,?)", (mission_id, route_name, json.dumps(points), distance, duration, "medium" if latest["decision"] == "warning" else "low"))
             db.execute("INSERT INTO audit_logs(action,object_type,object_id,detail_json) VALUES(?,?,?,?)", ("plan", "route", str(route_id), json.dumps({"mission_id":mission_id}, ensure_ascii=False)))
-            self._json({"id":route_id,"mission_id":mission_id,"name":"主航线-直连","points":points,"distance_m":round(distance,1),"duration_s":round(duration,1),"risk_level":"medium" if latest["decision"] == "warning" else "low"}, HTTPStatus.CREATED)
+            self._json({"id":route_id,"mission_id":mission_id,"name":route_name,"points":points,"distance_m":round(distance,1),"duration_s":round(duration,1),"risk_level":"medium" if latest["decision"] == "warning" else "low"}, HTTPStatus.CREATED)
 
     def _decide_route(self, mission_id, route_id, action, payload, actor_username):
         decision = {"adopt": "adopted", "return": "returned", "revoke": "revoked"}[action]
@@ -1016,8 +1084,27 @@ def validate_mission(payload):
         raise ApiError(422, "INVALID_ALTITUDE", "计划高度必须为数字")
     if not 20 <= payload["planned_altitude"] <= 1200:
         raise ApiError(422, "INVALID_ALTITUDE", "计划高度必须在20至1200米之间")
+    raw_via = payload.get("via_points_json", payload.get("via_points", []))
+    if isinstance(raw_via, str):
+        try:
+            raw_via = json.loads(raw_via)
+        except json.JSONDecodeError as error:
+            raise ApiError(422, "INVALID_VIA_POINTS", "途经点必须是有效 JSON 数组") from error
+    if not isinstance(raw_via, list) or len(raw_via) > 12:
+        raise ApiError(422, "INVALID_VIA_POINTS", "途经点必须为数组且最多12个")
+    via_points = []
+    for index, point in enumerate(raw_via):
+        if not isinstance(point, dict):
+            raise ApiError(422, "INVALID_VIA_POINT", f"第{index + 1}个途经点格式不合法")
+        try:
+            longitude, latitude = float(point["longitude"]), float(point["latitude"])
+        except (KeyError, TypeError, ValueError) as error:
+            raise ApiError(422, "INVALID_VIA_POINT", f"第{index + 1}个途经点坐标无效") from error
+        if not 105 <= longitude <= 110 or not 28 <= latitude <= 32:
+            raise ApiError(422, "OUT_OF_DEMO_AREA", f"第{index + 1}个途经点超出演示区域")
+        via_points.append({"name": str(point.get("name") or f"途经点{index + 1}")[:120], "longitude": longitude, "latitude": latitude, "source": str(point.get("source") or "public_reference")[:80], "source_id": str(point.get("source_id") or "")[:120]})
     time_window_start, time_window_end = normalize_time_window(payload)
-    return {**{key: payload[key] for key in required}, "time_window_start": time_window_start, "time_window_end": time_window_end}
+    return {**{key: payload[key] for key in required}, "time_window_start": time_window_start, "time_window_end": time_window_end, "via_points_json": json.dumps(via_points, ensure_ascii=False)}
 
 def segment_intersects_box(a, b, box):
     minx,miny,maxx,maxy=box
