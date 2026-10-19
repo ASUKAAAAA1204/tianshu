@@ -310,6 +310,41 @@ test("public elevation profile is attributed and shows explicit upstream failure
   await expect(page.locator("#elevationProfile")).toContainText("合成演示数据");
 });
 
+test("building footprint review can focus traceable intersections on the map", async ({ page }) => {
+  await page.goto("/?map=maplibre");
+  if (await page.locator("#loginGate").isVisible()) {
+    await page.locator("#loginForm input[name='username']").fill("admin");
+    await page.locator("#loginForm input[name='password']").fill(process.env.E2E_PASSWORD || "admin123");
+    await page.locator("#loginForm button[type='submit']").click();
+  }
+  await expect.poll(() => page.evaluate(() => window.lpMap?.adapter?.context?.data?.reference_buildings?.features?.length || 0)).toBe(158);
+  const result = await page.evaluate(async () => {
+    const token = localStorage.getItem("lp_token");
+    const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+    const feature = window.lpMap.adapter.context.data.reference_buildings.features[0];
+    const ring = feature.geometry.coordinates[0][0];
+    const mission = { id: "MS-BUILDING-QA-01", name: "建筑轮廓复核", vehicle_id: "UAV-LP-001", route_name: "待规划", start_lng: ring[0][0], start_lat: ring[0][1], end_lng: ring[2][0], end_lat: ring[2][1], planned_altitude: 120 };
+    await fetch("/api/missions", { method: "POST", headers, body: JSON.stringify(mission) });
+    const checked = await fetch(`/api/missions/${mission.id}/check`, { method: "POST", headers, body: "{}" }).then((response) => response.json());
+    return { checked, featureId: String(feature.id) };
+  });
+  expect(result.checked.items.map((item) => item.rule_code)).toContain("B-001");
+  expect(result.checked.building_footprint_hits[0].height_m).toBeNull();
+  await page.reload();
+  await page.locator('[data-mission-card="MS-BUILDING-QA-01"] [data-check]').click();
+  const focus = page.locator("[data-focus-buildings]");
+  await expect(focus).toBeVisible();
+  await focus.click();
+  await expect.poll(() => page.evaluate(() => window.lpMap.adapter.state.selectedBuildingIds.length)).toBeGreaterThan(0);
+  expect(await page.evaluate(() => window.lpMap.adapter.map.getZoom())).toBeGreaterThanOrEqual(12);
+  expect(await page.evaluate((id) => window.lpMap.adapter.map.getSource("lp-reference-buildings")._data.features.find((feature) => String(feature.id) === id)?.properties?.route_intersection, result.featureId)).toBeTruthy();
+  await page.screenshot({ path: screenshot("building-footprint-review-1366x768.png"), fullPage: false });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.locator("[data-focus-buildings]")).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
+  await page.screenshot({ path: screenshot("building-footprint-review-390x844.png"), fullPage: false });
+});
+
 test("configured local vector style is selected without duplicating fallback OSM roads", async ({ page }) => {
   await page.route("**/api/map/config", (route) => route.fulfill({ json: { provider: "OpenMapTiles", style_url: "http://127.0.0.1:8890/test-openmaptiles-style.json" } }));
   await page.route("**/test-openmaptiles-style.json", (route) => route.fulfill({

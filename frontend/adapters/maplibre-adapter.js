@@ -99,7 +99,7 @@
   class MapLibreAdapter {
     constructor({ fallbackController }) {
       this.kind = "maplibre";
-      this.state = { zoom: 9.2, panX: 0, panY: 0, showDem: false, selectedWaypointIds: [], filters: { task: true, airspace: true, facilities: true, risks: true, altitude: "all" } };
+      this.state = { zoom: 9.2, panX: 0, panY: 0, showDem: false, selectedWaypointIds: [], selectedBuildingIds: [], filters: { task: true, airspace: true, facilities: true, risks: true, altitude: "all" } };
       this.fallbackController = fallbackController;
       this.map = null;
       this.context = null;
@@ -259,8 +259,8 @@
         this.map.addLayer({ id: "lp-airspace-outline", type: "line", source: "lp-airspace", paint: { "line-color": "#8abdb1", "line-opacity": 0.72, "line-width": ["case", ["boolean", ["get", "selected"], false], 1.5, 0.9] } });
       }
       if (!this.map.getLayer("lp-reference-buildings-fill")) {
-        this.map.addLayer({ id: "lp-reference-buildings-fill", type: "fill", source: "lp-reference-buildings", minzoom: 12, paint: { "fill-color": "#8094a3", "fill-opacity": 0.16 } });
-        this.map.addLayer({ id: "lp-reference-buildings-outline", type: "line", source: "lp-reference-buildings", minzoom: 12, paint: { "line-color": "#9eb1bd", "line-opacity": 0.55, "line-width": ["interpolate", ["linear"], ["zoom"], 12, 0.35, 16, 1.1] } });
+        this.map.addLayer({ id: "lp-reference-buildings-fill", type: "fill", source: "lp-reference-buildings", minzoom: 12, paint: { "fill-color": ["case", ["boolean", ["get", "route_intersection"], false], "#efb75c", "#8094a3"], "fill-opacity": ["case", ["boolean", ["get", "route_intersection"], false], 0.48, 0.16] } });
+        this.map.addLayer({ id: "lp-reference-buildings-outline", type: "line", source: "lp-reference-buildings", minzoom: 12, paint: { "line-color": ["case", ["boolean", ["get", "route_intersection"], false], "#ffe2a3", "#9eb1bd"], "line-opacity": 0.78, "line-width": ["case", ["boolean", ["get", "route_intersection"], false], 2, ["interpolate", ["linear"], ["zoom"], 12, 0.35, 16, 1.1]] } });
         this.map.on("click", "lp-reference-buildings-fill", (event) => { const feature = event.features?.[0]; if (feature) this.context?.onBuildingClick?.({ ...feature, properties: { ...feature.properties, source_kind: "geofabrik_osm_reference" } }); });
       }
       if (!this.map.getLayer("lp-facilities")) {
@@ -285,7 +285,9 @@
       this.map.getSource("lp-risks")?.setData(next.risks);
       this.map.getSource("lp-routes")?.setData(next.routes);
       this.map.getSource("lp-aircraft")?.setData(next.vehicles);
-      this.map.getSource("lp-reference-buildings")?.setData(this.context?.data?.reference_buildings || emptyCollection());
+      const buildingIds = new Set(this.state.selectedBuildingIds.map(String));
+      const buildingData = this.context?.data?.reference_buildings || emptyCollection();
+      this.map.getSource("lp-reference-buildings")?.setData({ ...buildingData, features: (buildingData.features || []).map((feature) => ({ ...feature, properties: { ...feature.properties, route_intersection: buildingIds.has(String(feature.id)) } })) });
       this.syncMarkers(next);
       this.renderRouteOverlay(next);
       this.renderWaypointControls(next);
@@ -415,6 +417,16 @@
     }
     setZoom(value, context) { this.context = context; this.state.zoom = Math.max(0.8, Math.min(18, value)); this.map?.zoomTo(this.state.zoom, { duration: 120 }); this.render(context); }
     focusPoint(coordinates) { if (!this.map || !validPoint(coordinates)) return false; this.userMoved = true; this.map.easeTo({ center: [Number(coordinates[0]), Number(coordinates[1])], zoom: Math.max(13, this.map.getZoom()), duration: 450 }); return true; }
+    focusReferenceBuildings(ids) {
+      const wanted = new Set((ids || []).map(String));
+      const features = (this.context?.data?.reference_buildings?.features || []).filter((feature) => wanted.has(String(feature.id)));
+      if (!this.map || !features.length) return false;
+      this.state.selectedBuildingIds = features.map((feature) => String(feature.id));
+      this.userMoved = true;
+      this.syncSources(true);
+      this.map.fitBounds(boundsForFeatures(features), { padding: 80, maxZoom: 16, duration: 450 });
+      return true;
+    }
     reset(context) { this.context = context; this.userMoved = false; this.didFitMission = false; this.map?.setPitch(0); this.render(context); }
     toggleDem(context) { this.context = context; this.state.showDem = !this.state.showDem; this.render(context); return this.state.showDem; }
     setFilters(filters, context) { this.context = context; this.state.filters = { ...this.state.filters, ...filters }; this.render(context); }

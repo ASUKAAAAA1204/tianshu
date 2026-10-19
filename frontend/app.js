@@ -326,7 +326,11 @@ async function runAction(id, action) {
   if (action === "check") {
     $("#resultBadge").textContent = `${result.decision} · ${result.risk_level}`;
   const terrainNote = result.terrain?.available ? `<div class="result-block soft"><strong>DEM参考 · 合成演示</strong><span>起始高程 ${result.terrain.start_elevation_m}m · 最大高程 ${result.terrain.terrain_max_m}m · 相对地形起伏 ${result.terrain.terrain_relief_m}m</span><small>${result.terrain.sample_count}个采样点 · 仅为相对地形起伏参考，不代表离地净空或安全放行</small></div>` : `<div class="result-block soft"><strong>DEM参考未接入</strong><span>当前结果不包含地形净空判定</span><small>公开参考 / 合成演示数据</small></div>`;
-    $("#resultContent").innerHTML = `<div class="result-summary ${result.decision}">${result.decision === "pass" ? "规则检查通过，可生成航线" : result.decision === "warning" ? "存在软约束，需人工确认" : "存在硬约束，禁止生成航线"}</div>${result.items.length ? result.items.map((x) => `<div class="result-block ${x.level}"><strong>${x.rule_code}</strong><span>${x.message}</span><small>${x.action}</small></div>`).join("") : '<div class="result-empty">没有发现冲突项</div>'}${terrainNote}`;
+    $("#resultContent").innerHTML = `<div class="result-summary ${result.decision}">${result.decision === "pass" ? "规则检查通过，可生成航线" : result.decision === "warning" ? "存在软约束，需人工确认" : "存在硬约束，禁止生成航线"}</div>${result.items.length ? result.items.map((x) => `<div class="result-block ${x.level}"><strong>${x.rule_code}</strong><span>${x.message}</span><small>${x.action}${x.feature_ids?.length ? ` <button type="button" data-focus-buildings="${x.feature_ids.join(",")}">地图定位</button>` : ""}</small></div>`).join("") : '<div class="result-empty">没有发现冲突项</div>'}${terrainNote}`;
+    document.querySelectorAll("[data-focus-buildings]").forEach((button) => button.addEventListener("click", () => {
+      const ids = button.dataset.focusBuildings.split(",").filter(Boolean);
+      if (!window.lpMap?.focusReferenceBuildings?.(ids)) button.textContent = "定位失败";
+    }));
   } else {
     selectedRoute = result;
     renderMap();
