@@ -33,6 +33,7 @@ ROOT = Path(__file__).resolve().parents[1]
 FRONTEND = ROOT / "frontend"
 SPATIAL_ASSETS = ROOT / "data" / "demo" / "spatial_assets.json"
 DEM_GRID = ROOT / "data" / "demo" / "liangping_dem_grid.json"
+REFERENCE_BUILDINGS = ROOT / "data" / "reference" / "liangping-buildings.geojson"
 SPATIAL_ASSETS = ROOT / "data" / "demo" / "spatial_assets.json"
 DEM_GRID = ROOT / "data" / "demo" / "liangping_dem_grid.json"
 MISSION_ID = re.compile(r"^[A-Z0-9-]{4,40}$")
@@ -104,24 +105,28 @@ def route_data_quality():
         try:
             manifest = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
-            return False
+            return False, {}
         required = ("source_url", "license", "coverage_bbox", "acquired_at", "coordinate_reference", "data_file", "sha256")
         if manifest.get("verified") is not True or not all(manifest.get(key) for key in required):
-            return False
+            return False, manifest
         data_root = path.parent.resolve()
         data_path = (data_root / manifest["data_file"]).resolve()
         try:
             data_path.relative_to(data_root)
-            return data_path.is_file() and hashlib.sha256(data_path.read_bytes()).hexdigest() == str(manifest["sha256"]).lower()
+            return data_path.is_file() and hashlib.sha256(data_path.read_bytes()).hexdigest() == str(manifest["sha256"]).lower(), manifest
         except (OSError, ValueError):
-            return False
+            return False, manifest
 
-    dem_verified = manifest_verified(dem_manifest)
-    buildings_verified = manifest_verified(building_manifest)
+    dem_verified, _ = manifest_verified(dem_manifest)
+    building_footprints_verified, building_info = manifest_verified(building_manifest)
+    buildings_verified = building_footprints_verified and int(building_info.get("height_present_count") or 0) > 0
     return {
         "terrain": "verified_reference" if dem_verified else ("synthetic_demo" if dem_metadata.get("source") == "synthetic_demo" else "unverified"),
         "terrain_verified": dem_verified,
         "building_obstacles": "verified_reference" if buildings_verified else "not_integrated",
+        "building_footprints_verified": building_footprints_verified,
+        "building_feature_count": int(building_info.get("feature_count") or 0) if building_footprints_verified else 0,
+        "building_height_present_count": int(building_info.get("height_present_count") or 0) if building_footprints_verified else 0,
         "building_obstacles_verified": buildings_verified,
         "flight_safety_release": False,
         "review_required": not (dem_verified and buildings_verified),
@@ -445,6 +450,10 @@ class Handler(BaseHTTPRequestHandler):
                     except (OSError, json.JSONDecodeError):
                         spatial = {"type": "FeatureCollection", "features": []}
                     payload["spatial_assets"] = spatial
+                    try:
+                        payload["reference_buildings"] = json.loads(REFERENCE_BUILDINGS.read_text(encoding="utf-8")) if REFERENCE_BUILDINGS.exists() else {"type": "FeatureCollection", "features": []}
+                    except (OSError, json.JSONDecodeError):
+                        payload["reference_buildings"] = {"type": "FeatureCollection", "features": []}
                     payload["map_features"] = build_map_feature_collection(db, SPATIAL_ASSETS)
                     payload["traceability"] = traceability()
                     payload["airspace_cells"] = rows(db, resources["/api/airspace-cells"])

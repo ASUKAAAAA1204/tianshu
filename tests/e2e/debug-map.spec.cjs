@@ -23,6 +23,8 @@ test("MapLibre workspace is focused and readable", async ({ page }) => {
   expect(await page.evaluate(() => Boolean(window.lpMap?.adapter?.map?.getSource("lp-geography") && window.lpMap.adapter.map.getLayer("lp-reference-roads") && window.lpMap.adapter.map.getLayer("lp-reference-waterways")))).toBeTruthy();
   await expect.poll(() => page.evaluate(() => window.lpMap.adapter.referenceGeographyLoaded)).toBeTruthy();
   expect(await page.evaluate(() => window.lpMap.adapter.map.getSource("lp-geography")._data.features.length)).toBeGreaterThan(100);
+  expect(await page.evaluate(() => window.lpMap.adapter.context.data.reference_buildings.features.length)).toBe(158);
+  expect(await page.evaluate(() => Boolean(window.lpMap.adapter.map.getLayer("lp-reference-buildings-fill")))).toBeTruthy();
   expect(await page.evaluate(() => window.lpMap.adapter.map.queryRenderedFeatures({ layers: ["lp-reference-roads"] }).length)).toBeGreaterThan(20);
   expect(await page.evaluate(() => {
     const adapter = window.lpMap.adapter; const item = adapter.markers.find((marker) => marker.element.classList.contains("vehicle"));

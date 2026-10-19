@@ -1,0 +1,18 @@
+{
+  "verified": true,
+  "dataset_name": "梁平任务区 OpenStreetMap 建筑轮廓参考子集",
+  "source_url": "https://download.geofabrik.de/asia/china/chongqing-latest-free.gpkg.zip",
+  "source_archive_sha256": "8b4d8403ffae57809fb606cc8c218c629e8a170b943b0ec5bea6faab9879ec21",
+  "license": "ODbL-1.0",
+  "attribution": "© OpenStreetMap contributors / Geofabrik",
+  "coverage_bbox": [107.70, 30.62, 107.82, 30.74],
+  "acquired_at": "2026-10-18T20:25:06Z",
+  "coordinate_reference": "EPSG:4326",
+  "data_file": "liangping-buildings.geojson",
+  "sha256": "fc453e3a59e76c66fc1638775fc507032ce01964e4595e91523a1ad3e4fe7026",
+  "feature_count": 158,
+  "height_present_count": 0,
+  "height_missing_count": 158,
+  "height_policy": "原始免费导出未提供 height/building:levels；缺失保持未知，不做楼层或高度估算",
+  "usage_boundary": "公开建筑轮廓参考，不是完整或权威障碍物库；没有建筑高度，不能进行三维碰撞、净空或飞行安全放行"
+}

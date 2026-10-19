@@ -44,7 +44,7 @@ function displayMapObject(type, value) {
     ["建筑高度属性", properties.height != null ? `${properties.height} m · 瓦片属性` : properties["building:height"] != null ? `${properties["building:height"]} m · 瓦片属性` : "未提供"],
     ["地图挤出高度", properties.render_height != null ? `${properties.render_height} m · 样式渲染值，可能为估算` : "当前要素未提供"],
     ["楼层数", properties["building:levels"] != null ? `${properties["building:levels"]} 层 · 瓦片属性` : "未提供"],
-    ["数据来源", "OpenMapTiles / OpenStreetMap contributors"],
+    ["数据来源", properties.source_kind === "geofabrik_osm_reference" ? "Geofabrik / © OpenStreetMap contributors · ODbL 1.0" : "OpenMapTiles / OpenStreetMap contributors"],
     ["判定边界", "底图参考对象；不代表完整建筑障碍库或实测高度，不参与安全放行"],
   ] : [
     ["对象类型", properties.asset_type || "未分类"], ["风险级别", properties.risk_level || (isRisk ? "未提供" : "未标注")],

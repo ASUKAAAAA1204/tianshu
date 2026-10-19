@@ -32,6 +32,9 @@ class DatabaseTests(unittest.TestCase):
                 geometry = json.loads(db.execute("SELECT geometry_json FROM layers LIMIT 1").fetchone()[0])
                 self.assertTrue(geometry["coordinates"])
                 self.assertIsNotNone(db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='route_replans'").fetchone())
+                buildings = json.loads(server_module.REFERENCE_BUILDINGS.read_text(encoding="utf-8"))
+                self.assertEqual(len(buildings["features"]), 158)
+                self.assertTrue(all(item["properties"]["height"] is None for item in buildings["features"]))
             finally:
                 db.close()
 
@@ -178,7 +181,7 @@ class ValidationTests(unittest.TestCase):
             (reference / "buildings.geojson").write_bytes(building_bytes)
             common = {"verified": True, "coverage_bbox": [107.4, 30.3, 108.0, 31.0], "acquired_at": "2026-10-19", "coordinate_reference": "EPSG:4326"}
             dem_manifest = {**common, "source_url": "https://data.example/dem", "license": "public", "data_file": "dem-grid.tif", "sha256": hashlib.sha256(dem_bytes).hexdigest()}
-            building_manifest = {**common, "source_url": "https://data.example/buildings", "license": "ODbL-1.0", "data_file": "buildings.geojson", "sha256": hashlib.sha256(building_bytes).hexdigest()}
+            building_manifest = {**common, "source_url": "https://data.example/buildings", "license": "ODbL-1.0", "data_file": "buildings.geojson", "sha256": hashlib.sha256(building_bytes).hexdigest(), "height_present_count": 1}
             (reference / "dem.manifest.json").write_text(json.dumps(dem_manifest), encoding="utf-8")
             building_manifest_path = reference / "buildings.manifest.json"
             building_manifest_path.write_text(json.dumps(building_manifest), encoding="utf-8")

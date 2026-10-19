@@ -246,7 +246,7 @@
       if (!this.map) return;
       const addSource = (id, options = {}) => { if (!this.map.getSource(id)) this.map.addSource(id, { type: "geojson", data: emptyCollection(), ...options }); };
       addSource("lp-geography");
-      ["lp-airspace", "lp-risks", "lp-routes", "lp-aircraft"].forEach((id) => addSource(id));
+      ["lp-airspace", "lp-risks", "lp-routes", "lp-aircraft", "lp-reference-buildings"].forEach((id) => addSource(id));
       addSource("lp-facilities", { cluster: true, clusterRadius: 36, clusterMaxZoom: 11 });
       if (this.styleMode === "local-reference" && !this.map.getLayer("lp-reference-roads")) {
         this.map.addLayer({ id: "lp-reference-landuse", type: "fill", source: "lp-geography", filter: ["==", ["get", "asset_type"], "landuse"], paint: { "fill-color": ["match", ["get", "class"], "forest", "#344d43", "grass", "#30463c", "meadow", "#35473a", "#293e3a"], "fill-opacity": 0.42 } });
@@ -257,6 +257,11 @@
       if (!this.map.getLayer("lp-airspace-fill")) {
         this.map.addLayer({ id: "lp-airspace-fill", type: "fill", source: "lp-airspace", paint: { "fill-color": ["case", ["boolean", ["get", "selected"], false], "#83b9aa", "#699e92"], "fill-opacity": ["case", ["boolean", ["get", "selected"], false], 0.13, 0.075] } });
         this.map.addLayer({ id: "lp-airspace-outline", type: "line", source: "lp-airspace", paint: { "line-color": "#8abdb1", "line-opacity": 0.72, "line-width": ["case", ["boolean", ["get", "selected"], false], 1.5, 0.9] } });
+      }
+      if (!this.map.getLayer("lp-reference-buildings-fill")) {
+        this.map.addLayer({ id: "lp-reference-buildings-fill", type: "fill", source: "lp-reference-buildings", minzoom: 12, paint: { "fill-color": "#8094a3", "fill-opacity": 0.16 } });
+        this.map.addLayer({ id: "lp-reference-buildings-outline", type: "line", source: "lp-reference-buildings", minzoom: 12, paint: { "line-color": "#9eb1bd", "line-opacity": 0.55, "line-width": ["interpolate", ["linear"], ["zoom"], 12, 0.35, 16, 1.1] } });
+        this.map.on("click", "lp-reference-buildings-fill", (event) => { const feature = event.features?.[0]; if (feature) this.context?.onBuildingClick?.({ ...feature, properties: { ...feature.properties, source_kind: "geofabrik_osm_reference" } }); });
       }
       if (!this.map.getLayer("lp-facilities")) {
         this.map.addLayer({ id: "lp-facilities", type: "circle", source: "lp-facilities", filter: ["!", ["has", "point_count"]], paint: { "circle-radius": ["case", ["boolean", ["get", "selected"], false], 5, ["match", ["get", "asset_type"], "route_reference_point", 2.6, 3.2]], "circle-color": ["case", ["boolean", ["get", "selected"], false], "#fff0a5", ["match", ["get", "asset_type"], "route_reference_point", "#87b5cb", "#cfa459"]], "circle-stroke-color": ["match", ["get", "asset_type"], "route_reference_point", "#c7e1eb", "#f0d49a"], "circle-stroke-width": ["case", ["boolean", ["get", "selected"], false], 1.5, 0.8] } });
@@ -280,6 +285,7 @@
       this.map.getSource("lp-risks")?.setData(next.risks);
       this.map.getSource("lp-routes")?.setData(next.routes);
       this.map.getSource("lp-aircraft")?.setData(next.vehicles);
+      this.map.getSource("lp-reference-buildings")?.setData(this.context?.data?.reference_buildings || emptyCollection());
       this.syncMarkers(next);
       this.renderRouteOverlay(next);
       this.renderWaypointControls(next);
