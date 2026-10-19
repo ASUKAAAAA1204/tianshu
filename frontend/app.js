@@ -308,8 +308,8 @@ async function showDetails(id) {
   const route = mission.routes[0];
   $("#resultBadge").textContent = mission.status_label;
   const terrain = route?.terrain;
-  const terrainSummary = terrain?.available ? `${terrain.terrain_risk} · 净空 ${terrain.clearance_min_m}m · ${terrain.sample_count}点` : "暂无DEM参考";
-  const routeHistory = mission.routes?.length ? `<div class="subhead">航线历史</div><div class="route-history">${mission.routes.map((item, index) => `<div class="result-block ${index === 0 ? "pass" : "soft"}"><strong>${item.name}${index === 0 ? " · 当前方案" : " · 历史方案"}</strong><span>${Number(item.distance_m).toFixed(1)} 米 · ${Number(item.duration_s).toFixed(1)} 秒 · 风险 ${item.risk_level}</span><small>${item.terrain?.available ? `DEM ${item.terrain.terrain_risk} · 净空 ${item.terrain.clearance_min_m}m` : "暂无DEM参考"} · ${item.created_at || "已记录"}</small></div>`).join("")}</div>` : "";
+  const terrainSummary = terrain?.available ? `${terrain.terrain_risk} · 起点至最高采样点相对起伏 ${terrain.terrain_relief_m}m · ${terrain.sample_count}点 · 合成演示估算` : "暂无DEM参考";
+  const routeHistory = mission.routes?.length ? `<div class="subhead">航线历史</div><div class="route-history">${mission.routes.map((item, index) => `<div class="result-block ${index === 0 ? "pass" : "soft"}"><strong>${item.name}${index === 0 ? " · 当前方案" : " · 历史方案"}</strong><span>${Number(item.distance_m).toFixed(1)} 米 · ${Number(item.duration_s).toFixed(1)} 秒 · 风险 ${item.risk_level}</span><small>${item.terrain?.available ? `DEM合成演示 · 相对地形起伏 ${item.terrain.terrain_relief_m}m · 不代表离地净空` : "暂无DEM参考"} · ${item.created_at || "已记录"}</small></div>`).join("")}</div>` : "";
   $("#resultContent").innerHTML = `<div class="detail-grid"><span>任务编号</span><strong>${mission.id}</strong><span>飞行器</span><strong>${mission.vehicle_id}</strong><span>起终点</span><strong>${mission.start_lng}, ${mission.start_lat} → ${mission.end_lng}, ${mission.end_lat}</strong><span>计划高度</span><strong>${mission.planned_altitude} 米</strong><span>最近检查</span><strong>${check ? `${check.decision} / ${check.risk_level}` : "尚未检查"}</strong><span>候选航线</span><strong>${route ? `${route.name} / ${route.distance_m.toFixed(1)} 米` : "尚未生成"}</strong><span>地形参考</span><strong>${terrainSummary}</strong></div>${routeHistory}`;
   if (mission.replans?.length) {
     $("#resultContent").innerHTML += mission.replans.map((item) => `<div class="result-block ${item.status === "confirmed" ? "pass" : "soft"}"><strong>重规划 #${item.id}</strong><span>${item.reason}</span><small>${item.status}${item.status === "proposed" ? ` <button data-confirm-replan="${item.id}" data-mission="${mission.id}">人工确认</button>` : ""}</small></div>`).join("");
@@ -325,15 +325,15 @@ async function runAction(id, action) {
   if (!response.ok) return showError(result);
   if (action === "check") {
     $("#resultBadge").textContent = `${result.decision} · ${result.risk_level}`;
-  const terrainNote = result.terrain?.available ? `<div class="result-block soft"><strong>DEM参考 · 合成演示</strong><span>起始高程 ${result.terrain.start_elevation_m}m · 最大高程 ${result.terrain.terrain_max_m}m · 地形起伏 ${result.terrain.terrain_relief_m}m · 最小净空 ${result.terrain.clearance_min_m}m</span><small>${result.terrain.sample_count}个采样点 · 阈值高风险低于${result.terrain.thresholds?.high_below_m ?? "未提供"}m · 正式运行需替换为授权高程与建筑数据</small></div>` : `<div class="result-block soft"><strong>DEM参考未接入</strong><span>当前结果不包含地形净空判定</span><small>公开参考 / 合成演示数据</small></div>`;
+  const terrainNote = result.terrain?.available ? `<div class="result-block soft"><strong>DEM参考 · 合成演示</strong><span>起始高程 ${result.terrain.start_elevation_m}m · 最大高程 ${result.terrain.terrain_max_m}m · 相对地形起伏 ${result.terrain.terrain_relief_m}m</span><small>${result.terrain.sample_count}个采样点 · 仅为相对地形起伏参考，不代表离地净空或安全放行</small></div>` : `<div class="result-block soft"><strong>DEM参考未接入</strong><span>当前结果不包含地形净空判定</span><small>公开参考 / 合成演示数据</small></div>`;
     $("#resultContent").innerHTML = `<div class="result-summary ${result.decision}">${result.decision === "pass" ? "规则检查通过，可生成航线" : result.decision === "warning" ? "存在软约束，需人工确认" : "存在硬约束，禁止生成航线"}</div>${result.items.length ? result.items.map((x) => `<div class="result-block ${x.level}"><strong>${x.rule_code}</strong><span>${x.message}</span><small>${x.action}</small></div>`).join("") : '<div class="result-empty">没有发现冲突项</div>'}${terrainNote}`;
   } else {
     selectedRoute = result;
     renderMap();
     $("#resultBadge").textContent = "航线已生成";
     const terrain = result.terrain;
-    const terrainLine = terrain?.available ? `<span>DEM地形：${terrain.terrain_risk} · 最小净空 ${terrain.clearance_min_m} 米</span>` : `<span>DEM地形：暂无参考数据</span>`;
-    const candidates = (result.candidates || []).map((item) => `<div class="result-block ${item.feasible ? (item.name === result.name ? "pass" : "soft") : "blocked"}"><strong>${item.name}${item.name === result.name ? " · 已选" : ""}</strong><span>${item.feasible ? `评分 ${item.score} · 距离 ${item.distance_m} 米` : `不可行：${item.hard_conflicts.join("、")}`}</span><small>${item.terrain?.available ? `地形 ${item.terrain.terrain_risk} · 净空 ${item.terrain.clearance_min_m}m` : "暂无DEM参考"}${item.soft_conflicts?.length ? ` · 软约束 ${item.soft_conflicts.join("、")}` : ""}</small></div>`).join("");
+    const terrainLine = terrain?.available ? `<span>DEM合成演示：地形风险参考 ${terrain.terrain_risk} · 相对地形起伏 ${terrain.terrain_relief_m} 米；不代表离地净空</span>` : `<span>DEM地形：暂无参考数据</span>`;
+    const candidates = (result.candidates || []).map((item) => `<div class="result-block ${item.feasible ? (item.name === result.name ? "pass" : "soft") : "blocked"}"><strong>${item.name}${item.name === result.name ? " · 已选" : ""}</strong><span>${item.feasible ? `评分 ${item.score} · 距离 ${item.distance_m} 米` : `不可行：${item.hard_conflicts.join("、")}`}</span><small>${item.terrain?.available ? `地形合成参考 ${item.terrain.terrain_risk} · 相对地形起伏 ${item.terrain.terrain_relief_m}m · 非离地净空` : "暂无DEM参考"}${item.soft_conflicts?.length ? ` · 软约束 ${item.soft_conflicts.join("、")}` : ""}</small></div>`).join("");
     $("#resultContent").innerHTML = `<div class="route-result"><strong>${result.name}</strong><span>策略：${result.strategy || "direct"} · 距离 ${result.distance_m} 米 · 预计 ${result.duration_s} 秒</span><span>风险等级：${result.risk_level}</span>${terrainLine}</div><div class="subhead">候选航线评分</div>${candidates}`;
   }
 }
@@ -513,7 +513,7 @@ function renderElevationProfile(profile) {
   const elevations = samples.map((sample) => Number(sample.elevation_m));
   const minimum = Math.min(...elevations); const maximum = Math.max(...elevations);
   const summary = document.createElement("div"); summary.className = "elevation-profile-summary";
-  summary.textContent = `${samples.length} 个沿线采样点 · ${minimum.toFixed(1)}–${maximum.toFixed(1)} m · 垂直基准未声明`;
+  summary.textContent = `${samples.length} 个沿线采样点 · ${minimum.toFixed(1)}–${maximum.toFixed(1)} m · 来源标称 ${profile.source_resolution_m ? `${profile.source_resolution_m}m` : "分辨率未知"} · 垂直基准未声明`;
   const chart = document.createElement("div"); chart.className = "elevation-chart"; chart.setAttribute("role", "img"); chart.setAttribute("aria-label", `公开参考高程剖面，${samples.length}个采样点，最低${minimum.toFixed(1)}米，最高${maximum.toFixed(1)}米`);
   samples.forEach((sample, index) => {
     const bar = document.createElement("span"); bar.className = "elevation-chart-sample";
@@ -527,7 +527,7 @@ function renderElevationProfile(profile) {
   const end = document.createElement("span"); end.textContent = `终点 ${elevations.at(-1).toFixed(1)} m`;
   endpoints.append(start, end);
   const source = document.createElement("a"); source.href = profile.source_url; source.target = "_blank"; source.rel = "noopener noreferrer"; source.textContent = profile.source;
-  const boundary = document.createElement("small"); boundary.className = "elevation-profile-boundary"; boundary.textContent = `${profile.data_boundary}；数据源未声明分辨率/垂直基准，不用于安全放行。${profile.usage_terms ? ` ${profile.usage_terms}` : ""}`;
+  const boundary = document.createElement("small"); boundary.className = "elevation-profile-boundary"; boundary.textContent = `${profile.data_boundary}；${profile.source_resolution_note || "数据源未声明分辨率"}；垂直基准未声明，不用于安全放行。${profile.usage_terms ? ` ${profile.usage_terms}` : ""}`;
   target.append(summary, chart, endpoints, source, boundary);
 }
 

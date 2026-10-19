@@ -258,6 +258,7 @@ test("local place search can confirm and populate a mission endpoint", async ({ 
   await expect.poll(() => page.locator("#resultBadge").innerText()).toMatch(/pass|warning/);
   await expect(page.locator("#resultContent")).toContainText("未接入具备来源、许可与覆盖审计的建筑障碍物数据");
   await expect(page.locator("#resultContent")).toContainText("合成演示数据，不可用于净空结论");
+  await expect(page.locator("#resultContent")).not.toContainText("最小净空");
   await missionCard.locator("[data-plan]").click();
   await expect.poll(() => page.evaluate(() => window.lpMap.adapter.context.selectedRoute?.points?.length || 0)).toBe(3);
   await expect.poll(() => page.evaluate(() => window.lpMap.adapter.context.selectedRoute?.name)).toBe("主航线-参考点规划");
@@ -279,6 +280,8 @@ test("public elevation profile is attributed and shows explicit upstream failure
       ],
       source: "Open-Meteo Elevation API",
       source_url: "https://open-meteo.com/en/docs/elevation-api",
+      source_resolution_m: 90,
+      source_resolution_note: "Open-Meteo 官方文档标称 Copernicus DEM GLO-90 / 90m",
       vertical_datum: "not provided",
       data_boundary: "public reference only",
       usage_terms: "商业部署前需核验并取得对应商业许可",
@@ -295,6 +298,8 @@ test("public elevation profile is attributed and shows explicit upstream failure
   await expect(page.locator("#elevationProfile")).toContainText("Open-Meteo Elevation API");
   await expect(page.locator("#elevationProfile .elevation-chart-sample")).toHaveCount(3);
   await expect(page.locator("#elevationProfile")).toContainText("不用于安全放行");
+  await expect(page.locator("#elevationProfile")).toContainText("来源标称 90m");
+  await expect(page.locator("#elevationProfile")).toContainText("Copernicus DEM GLO-90");
   await expect(page.locator("#elevationProfile")).toContainText("商业部署前需核验并取得对应商业许可");
   await page.screenshot({ path: screenshot("public-elevation-profile-1366x768.png"), fullPage: false });
   failUpstream = true;

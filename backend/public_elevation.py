@@ -136,8 +136,9 @@ def fetch_elevations(points: list[list[float]], timeout: float = 8.0) -> dict:
         "retrieved_at": max(timestamps) if timestamps else retrieved_at,
         "coordinate_reference": "WGS84 / EPSG:4326 input",
         "vertical_datum": "未由接口响应声明；不得用于跨基准净空换算",
-        "source_resolution_m": None,
+        "source_resolution_m": 90,
+        "source_resolution_note": "Open-Meteo 官方文档标称 Copernicus DEM GLO-90 / 90m；本次响应未单独返回分辨率",
         "quality_level": "public_reference_only",
-        "data_boundary": "公开参考高程；非权威测绘，不含建筑/树木/线缆高度，不用于真实飞行安全放行",
+        "data_boundary": "公开参考地形高程；Copernicus DEM GLO-90 / 90m 标称分辨率，不含建筑/树木/线缆高度，不用于真实飞行安全放行；请署名 Copernicus DEM",
         "usage_terms": "须遵守 Open-Meteo 署名与使用条款；商业部署前需核验并取得对应商业许可",
     }
