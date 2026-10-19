@@ -9,5 +9,7 @@ $env:LP_ENV = "demo"
 $env:LP_HOST = "127.0.0.1"
 $env:LP_PORT = "8765"
 $env:DATABASE_URL = "sqlite:///$root/data/demo-runtime.db"
+if (-not $env:LP_MAP_STYLE_URL) { $env:LP_MAP_STYLE_URL = "https://tiles.openfreemap.org/styles/liberty" }
 Write-Host "Liangping low-altitude demo: http://127.0.0.1:8765"
+Write-Host "Map style: $env:LP_MAP_STYLE_URL"
 & $python.Source "$root\backend\server.py"

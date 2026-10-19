@@ -37,6 +37,7 @@ DEM_GRID = ROOT / "data" / "demo" / "liangping_dem_grid.json"
 MISSION_ID = re.compile(r"^[A-Z0-9-]{4,40}$")
 DEMO_MODE = os.environ.get("DEMO_MODE", "false").lower() == "true"
 PRODUCTION_MODE = os.environ.get("LP_ENV", "development").lower() == "production"
+MAP_STYLE_URL = os.environ.get("LP_MAP_STYLE_URL", "").strip()
 MAX_BODY_BYTES = int(os.environ.get("LP_MAX_BODY_BYTES", "2097152"))
 SESSION_TTL_SECONDS = int(os.environ.get("LP_SESSION_TTL_SECONDS", "28800"))
 RATE_LIMIT_WINDOW_SECONDS = int(os.environ.get("LP_RATE_LIMIT_WINDOW_SECONDS", "60"))
@@ -225,7 +226,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Referrer-Policy", "no-referrer")
         self._security_headers()
         if resolved.suffix.lower() == ".html":
-            self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://tile.openstreetmap.org; object-src 'none'; base-uri 'self'; frame-ancestors 'none'")
+            self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: http://127.0.0.1:8090 http://localhost:8090 https://tiles.openfreemap.org; connect-src 'self' http://127.0.0.1:8090 http://localhost:8090 https://tiles.openfreemap.org; object-src 'none'; base-uri 'self'; frame-ancestors 'none'")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
@@ -310,6 +311,10 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):  # noqa: N802
         try:
             route = urlparse(self.path).path
+            if route == "/api/map/config":
+                provider = "OpenFreeMap" if "tiles.openfreemap.org" in MAP_STYLE_URL else "OpenMapTiles" if MAP_STYLE_URL else "local-reference"
+                self._json({"style_url": MAP_STYLE_URL, "provider": provider})
+                return
             if route == "/api/health":
                 capabilities = database_capabilities()
                 try:

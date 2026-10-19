@@ -18,6 +18,7 @@ test("MapLibre workspace is focused and readable", async ({ page }) => {
   await expect(page.locator("#maplibreRouteOverlay .route-overlay-primary").or(page.locator("#mapCanvas svg .route-primary"))).toHaveCount(1);
   await expect(page.locator("#maplibreRouteOverlay .route-overlay-backup").or(page.locator("#mapCanvas svg .route-backup"))).toHaveCount(0);
   await expect(page.locator("#mapModeStatus")).toContainText("data synced");
+  await expect(page.locator("#mapModeStatus")).toContainText("OpenMapTiles style not configured");
   expect(await page.evaluate(() => window.lpMap?.adapter?.kind)).toBe("maplibre");
   expect(await page.evaluate(() => Boolean(window.lpMap?.adapter?.map?.getSource("lp-geography") && window.lpMap.adapter.map.getLayer("lp-reference-roads") && window.lpMap.adapter.map.getLayer("lp-reference-waterways")))).toBeTruthy();
   await expect.poll(() => page.evaluate(() => window.lpMap.adapter.referenceGeographyLoaded)).toBeTruthy();
@@ -202,6 +203,44 @@ test("map controls update visible state", async ({ page }) => {
   expect(pageErrors).toEqual([]);
   await page.locator("#mapTimelineTrack .timeline-item").first().click();
   await expect(page.locator("#mapTimelineTrack .timeline-item.is-active")).toHaveCount(1);
+});
+
+test("configured local vector style is selected without duplicating fallback OSM roads", async ({ page }) => {
+  await page.route("**/api/map/config", (route) => route.fulfill({ json: { provider: "OpenMapTiles", style_url: "http://127.0.0.1:8890/test-openmaptiles-style.json" } }));
+  await page.route("**/test-openmaptiles-style.json", (route) => route.fulfill({
+    contentType: "application/json",
+    body: JSON.stringify({ version: 8, sources: {}, layers: [{ id: "test-background", type: "background", paint: { "background-color": "#172431" } }] }),
+  }));
+  await page.goto("/?map=maplibre");
+  if (await page.locator("#loginGate").isVisible()) {
+    await page.locator("#loginForm input[name='username']").fill("admin");
+    await page.locator("#loginForm input[name='password']").fill(process.env.E2E_PASSWORD || "admin123");
+    await page.locator("#loginForm button[type='submit']").click();
+  }
+  await expect(page.locator("#mapModeStatus")).toContainText("OpenMapTiles vector tiles · data synced");
+  expect(await page.evaluate(() => window.lpMap.adapter.styleMode)).toBe("openmaptiles");
+  expect(await page.evaluate(() => Boolean(window.lpMap.adapter.map.getLayer("lp-reference-roads")))).toBeFalsy();
+  expect(await page.evaluate(() => Boolean(window.lpMap.adapter.map.getSource("lp-routes")))).toBeTruthy();
+});
+
+test("live OpenFreeMap style renders real Liangping vector tiles", async ({ page }) => {
+  test.skip(process.env.LP_E2E_LIVE_MAP !== "1", "requires the public OpenFreeMap tile service");
+  const pageErrors = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  page.on("console", (message) => { if (message.type() === "error") pageErrors.push(message.text()); });
+  await page.goto("/?map=maplibre");
+  if (await page.locator("#loginGate").isVisible()) {
+    await page.locator("#loginForm input[name='username']").fill("admin");
+    await page.locator("#loginForm input[name='password']").fill(process.env.E2E_PASSWORD || "admin123");
+    await page.locator("#loginForm button[type='submit']").click();
+  }
+  await expect(page.locator("#mapModeStatus")).toContainText("OpenFreeMap · OpenMapTiles vector tiles · data synced");
+  await expect.poll(() => page.evaluate(() => window.lpMap.adapter.map.areTilesLoaded()), { timeout: 20_000 }).toBeTruthy();
+  const renderedFeatureCount = await page.evaluate(() => window.lpMap.adapter.map.queryRenderedFeatures().length);
+  expect(renderedFeatureCount).toBeGreaterThan(20);
+  const styleName = new URL(process.env.LP_MAP_STYLE_URL).pathname.split("/").at(-1).replace(/[^a-z0-9-]/gi, "");
+  await page.screenshot({ path: screenshot(`maplibre-openfreemap-${styleName}-live-1366x768.png`), fullPage: false });
+  expect(pageErrors).toEqual([]);
 });
 
 test("SVG fallback remains usable", async ({ page }) => {

@@ -109,30 +109,56 @@
       this.resizeObserver = null;
       this.referenceGeographyLoaded = false;
       this.referenceGeographyLoading = null;
+      this.styleMode = "local-reference";
+      this.tileStyleState = "not-configured";
+      this.tileProvider = "OpenMapTiles";
+    }
+
+    async resolveMapStyle() {
+      try {
+        const configResponse = await fetch("/api/map/config", { cache: "no-store" });
+        if (!configResponse.ok) { this.tileStyleState = "config-unavailable"; return style; }
+        const config = await configResponse.json();
+        if (!config.style_url) { this.tileStyleState = "not-configured"; return style; }
+        const styleUrl = new URL(config.style_url, window.location.href);
+        if (![window.location.origin, "http://127.0.0.1:8090", "http://localhost:8090", "https://tiles.openfreemap.org"].includes(styleUrl.origin)) { this.tileStyleState = "invalid-config"; return style; }
+        const styleResponse = await fetch(styleUrl.href, { cache: "no-store" });
+        if (!styleResponse.ok) { this.tileStyleState = "unavailable"; return style; }
+        const styleDocument = await styleResponse.json();
+        if (styleDocument?.version !== 8 || !Array.isArray(styleDocument.layers)) { this.tileStyleState = "invalid-style"; return style; }
+        this.styleMode = "openmaptiles";
+        this.tileProvider = config.provider || (styleUrl.hostname === "tiles.openfreemap.org" ? "OpenFreeMap" : "OpenMapTiles");
+        this.tileStyleState = "ready";
+        return styleUrl.href;
+      } catch {
+        this.tileStyleState = "unavailable";
+        return style;
+      }
     }
 
     async ensureMap() {
       if (this.map) return this.map;
       if (this.loading) return this.loading;
-      this.loading = Promise.resolve().then(() => {
+      this.loading = Promise.resolve().then(async () => {
         const module = window.maplibregl;
         if (!module?.Map) throw new Error("MAPLIBRE_VENDOR_UNAVAILABLE");
         const target = document.querySelector("#mapCanvas");
         if (!target) throw new Error("MAP_CONTAINER_NOT_FOUND");
+        const mapStyle = await this.resolveMapStyle();
         target.replaceChildren();
         const viewport = document.createElement("div"); viewport.id = "maplibreViewport"; viewport.className = "maplibre-viewport"; viewport.style.cssText = "position:absolute;inset:0;width:100%;height:100%;"; viewport.setAttribute("aria-hidden", "true");
         const markers = document.createElement("div"); markers.id = "maplibreMarkers"; markers.className = "maplibre-markers";
         const status = document.createElement("span"); status.id = "mapModeStatus"; status.className = "map-mode-status"; status.textContent = "MapLibre · loading";
         const north = document.createElement("div"); north.className = "map-label label-north"; north.textContent = "N · WGS84 参考";
         const south = document.createElement("div"); south.className = "map-label label-south"; south.textContent = "公开参考 / 合成演示数据 · 非授权生产数据";
-        const attribution = document.createElement("a"); attribution.className = "map-attribution"; attribution.href = "https://www.openstreetmap.org/copyright"; attribution.target = "_blank"; attribution.rel = "noopener noreferrer"; attribution.textContent = "© OpenStreetMap contributors · 公开参考"; attribution.setAttribute("aria-label", "OpenStreetMap版权与许可信息");
+        const attribution = document.createElement("a"); attribution.className = "map-attribution"; attribution.href = "https://www.openstreetmap.org/copyright"; attribution.target = "_blank"; attribution.rel = "noopener noreferrer"; attribution.textContent = "© OpenStreetMap contributors · OpenFreeMap / OpenMapTiles"; attribution.setAttribute("aria-label", "OpenStreetMap、OpenFreeMap和OpenMapTiles来源与许可信息");
         target.append(viewport, markers, north, south, attribution, status);
-        this.map = new module.Map({ container: "maplibreViewport", style, center: [107.75, 30.70], zoom: this.state.zoom, attributionControl: false, antialias: true, dragRotate: false, pitchWithRotate: false });
+        this.map = new module.Map({ container: "maplibreViewport", style: mapStyle, center: [107.75, 30.70], zoom: this.state.zoom, minZoom: 8, maxZoom: 18, attributionControl: false, antialias: true, dragRotate: false, pitchWithRotate: false, scrollZoom: true, dragPan: true, doubleClickZoom: true });
         if (window.ResizeObserver) {
           this.resizeObserver = new ResizeObserver(() => this.map?.resize());
           this.resizeObserver.observe(target);
         }
-        this.map.on("load", () => { try { this.addLayers(); this.loadReferenceGeography(); this.syncSources(true); } catch (error) { this.fail(error); } });
+        this.map.on("load", () => { try { this.addLayers(); if (this.styleMode === "local-reference") this.loadReferenceGeography(); this.syncSources(true); } catch (error) { this.fail(error); } });
         this.map.on("error", (event) => {
           const message = String(event?.error?.message || "");
           if (message.includes("lp-geography")) this.setStatus("local reference data unavailable");
@@ -208,7 +234,7 @@
       addSource("lp-geography");
       ["lp-airspace", "lp-risks", "lp-routes", "lp-aircraft"].forEach((id) => addSource(id));
       addSource("lp-facilities", { cluster: true, clusterRadius: 36, clusterMaxZoom: 11 });
-      if (!this.map.getLayer("lp-reference-roads")) {
+      if (this.styleMode === "local-reference" && !this.map.getLayer("lp-reference-roads")) {
         this.map.addLayer({ id: "lp-reference-landuse", type: "fill", source: "lp-geography", filter: ["==", ["get", "asset_type"], "landuse"], paint: { "fill-color": ["match", ["get", "class"], "forest", "#344d43", "grass", "#30463c", "meadow", "#35473a", "#293e3a"], "fill-opacity": 0.42 } });
         this.map.addLayer({ id: "lp-reference-water-fill", type: "fill", source: "lp-geography", filter: ["all", ["==", ["get", "asset_type"], "water"], ["==", ["geometry-type"], "Polygon"]], paint: { "fill-color": "#28516b", "fill-opacity": 0.76 } });
         this.map.addLayer({ id: "lp-reference-waterways", type: "line", source: "lp-geography", filter: ["all", ["==", ["get", "asset_type"], "water"], ["==", ["geometry-type"], "LineString"]], paint: { "line-color": "#4285a2", "line-width": ["interpolate", ["linear"], ["zoom"], 8, 0.7, 13, 2.2], "line-opacity": 0.88 } });
@@ -243,7 +269,8 @@
       this.syncMarkers(next);
       this.renderRouteOverlay(next);
       this.renderWaypointControls(next);
-      this.setStatus(this.referenceGeographyLoaded ? "ready · local OSM reference · data synced" : "ready · reference data loading · data synced");
+      const localStyleNote = this.tileStyleState === "not-configured" ? "OpenMapTiles style not configured" : this.tileStyleState === "unavailable" ? "TileServer unavailable" : this.tileStyleState === "invalid-style" || this.tileStyleState === "invalid-config" ? "TileServer configuration invalid" : "TileServer configuration unavailable";
+      this.setStatus(this.styleMode === "openmaptiles" ? `${this.tileProvider} · OpenMapTiles vector tiles · data synced` : this.referenceGeographyLoaded ? `local OSM reference · ${localStyleNote} · data synced` : "reference data loading · data synced");
       if (!this.userMoved || !this.didFitMission) { this.map.fitBounds(next.bounds, { padding: 48, maxZoom: 13, duration: 0 }); this.didFitMission = true; }
       const summary = document.querySelector("#mapObjectSummary");
       if (summary) { summary.replaceChildren(); const objects = []; if (next.mission) objects.push({ label: `任务 ${next.mission.id}`, action: () => document.querySelector(`[data-mission="${CSS.escape(next.mission.id)}"]`)?.click() }); objects.push({ label: `航线 ${next.routes.features.length} 条`, action: () => {} }); if (next.vehicle) objects.push({ label: `飞行器 ${next.vehicle.id}`, action: () => this.context?.onVehicleClick?.(next.vehicle.id) }); const selectedFeature = this.context?.selectedMapObject?.type === "spatial" ? this.context.selectedMapObject.feature : null; const details = [...(selectedFeature ? [selectedFeature] : []), ...(next.airspace.features || []), ...(next.facilities.features || []).filter((feature) => feature.properties?.asset_type !== "route_reference_point"), ...(next.risks.features || []).filter((feature) => !String(feature.properties?.point_id || "").startsWith("SYN-RISK-"))].filter((feature, index, all) => all.findIndex((item) => objectKey(item) === objectKey(feature)) === index).slice(0, 5); details.forEach((feature) => objects.push({ label: feature.properties?.name || feature.properties?.point_id || "空间对象", action: () => this.context?.onSpatialClick?.(feature) })); objects.forEach((item) => { const button = document.createElement("button"); button.type = "button"; button.textContent = item.label; button.addEventListener("click", item.action); summary.append(button); }); }

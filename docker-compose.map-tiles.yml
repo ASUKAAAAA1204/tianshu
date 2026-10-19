@@ -1,0 +1,11 @@
+services:
+  map-tiles:
+    image: maptiler/tileserver-gl:latest
+    container_name: liangping-map-tiles
+    restart: unless-stopped
+    command: ["--file", "/data/liangping.mbtiles", "--port", "8080"]
+    ports:
+      - "127.0.0.1:8090:8080"
+    volumes:
+      - ./data/openmaptiles:/data:ro
+
