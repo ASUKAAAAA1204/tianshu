@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
 import db as db_module  # noqa: E402
 from db import connect, database_capabilities, database_config, hash_password, init_db, session, sqlite_path_from_url, verify_password  # noqa: E402
 import server as server_module  # noqa: E402
-from server import ApiError, validate_mission, Handler, normalize_time_window, windows_overlap, route_paths_intersect, route_data_quality, telemetry_track_csv  # noqa: E402
+from server import ApiError, validate_mission, Handler, building_footprint_hits, normalize_time_window, windows_overlap, route_paths_intersect, route_data_quality, telemetry_track_csv  # noqa: E402
 from repository import PostgresStorage, SQLiteStorage, build_storage  # noqa: E402
 from spatial_repository import INTERSECTION_SQL  # noqa: E402
 from telemetry import TelemetryError, normalize_telemetry, runtime_alerts  # noqa: E402
@@ -169,6 +169,14 @@ class ValidationTests(unittest.TestCase):
         self.assertFalse(quality["building_obstacles_verified"])
         self.assertTrue(quality["review_required"])
         self.assertFalse(quality["flight_safety_release"])
+
+    def test_traceable_building_footprint_intersection_keeps_height_unknown(self):
+        buildings = json.loads(server_module.REFERENCE_BUILDINGS.read_text(encoding="utf-8"))
+        ring = buildings["features"][0]["geometry"]["coordinates"][0][0]
+        hits = building_footprint_hits([((ring[0][0], ring[0][1]), (ring[2][0], ring[2][1]))])
+        self.assertGreaterEqual(len(hits), 1)
+        self.assertIsNone(hits[0]["height_m"])
+        self.assertIn("OpenStreetMap", hits[0]["source"])
 
     def test_route_data_quality_requires_provenance_manifest_and_never_grants_clearance(self):
         with tempfile.TemporaryDirectory() as directory:

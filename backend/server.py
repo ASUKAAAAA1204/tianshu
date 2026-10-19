@@ -20,7 +20,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from db import database_capabilities, database_config, hash_password, init_db, rows, session, verify_password
-from geometry import segment_intersects_polygon, segments_intersect
+from geometry import segment_intersects_area, segment_intersects_polygon, segments_intersect
 from terrain import route_terrain_metrics
 from repository import build_storage
 from telemetry import TelemetryError, normalize_telemetry, runtime_alerts
@@ -132,6 +132,19 @@ def route_data_quality():
         "review_required": not (dem_verified and buildings_verified),
         "boundary": "底图建筑与合成DEM不能作为完整障碍物/地形证据；未发现已知冲突不代表无风险或可飞",
     }
+
+
+def building_footprint_hits(segments):
+    try:
+        collection = json.loads(REFERENCE_BUILDINGS.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    hits = []
+    for feature in collection.get("features") or []:
+        geometry = feature.get("geometry") or {}
+        if any(segment_intersects_area(left, right, geometry) for left, right in segments):
+            hits.append({"feature_id": str(feature.get("id") or ""), "name": (feature.get("properties") or {}).get("name"), "height_m": (feature.get("properties") or {}).get("height"), "source": "Geofabrik / OpenStreetMap · ODbL-1.0"})
+    return hits
 
 
 def insert_returning_id(db, query, params=()):
@@ -815,8 +828,11 @@ class Handler(BaseHTTPRequestHandler):
             if not facility_check["end"]["reachable"]:
                 items.append({"rule_code": "F-002", "level": "hard", "message": "终点没有满足机型兼容和服务半径的可用设施", "action": "调整终点或启用备降设施"})
             data_quality = route_data_quality()
+            building_hits = building_footprint_hits(segments) if data_quality["building_footprints_verified"] else []
+            if building_hits:
+                items.append({"rule_code": "B-001", "level": "soft", "message": f"航线二维投影与 {len(building_hits)} 个公开参考建筑轮廓相交；建筑高度均未知，不能判定三维碰撞", "action": "回到地图复核相交位置，并补充建筑高度/飞行高度基准", "feature_ids": [item["feature_id"] for item in building_hits[:20]], "source": "Geofabrik / OpenStreetMap · ODbL-1.0", "data_state": "footprint_intersection_height_unknown"})
             if not data_quality["building_obstacles_verified"]:
-                items.append({"rule_code": "D-001", "level": "soft", "message": "未接入具备来源、许可与覆盖审计的建筑障碍物数据；底图建筑仅供参考", "action": "人工核验并补充可审计的障碍物数据"})
+                items.append({"rule_code": "D-001", "level": "soft", "message": f"已接入 {data_quality['building_feature_count']} 个可追溯建筑轮廓，但可用高度为 {data_quality['building_height_present_count']} 个，不能进行三维碰撞判定", "action": "人工核验并补充可审计的建筑高度数据"})
             if not data_quality["terrain_verified"]:
                 items.append({"rule_code": "D-002", "level": "soft", "message": "真实地形数据尚未核验；当前DEM为合成演示数据，不可用于净空结论", "action": "人工复核地形与高程基准"})
             altitude = float(mission["planned_altitude"])
@@ -833,10 +849,10 @@ class Handler(BaseHTTPRequestHandler):
                     items.append({"rule_code": "A-001", "level": level, "message": f"航线进入四维空域单元 {cell['cell_id']}（{cell['min_altitude_m']}-{cell['max_altitude_m']}m）", "action": "调整高度/航线或人工确认", "cell_id": cell["cell_id"], "rule_version": cell["rule_version"], "data_version": cell["data_version"]})
             decision = "blocked" if any(x["level"] == "hard" for x in items) else ("warning" if items else "pass")
             risk = "high" if decision == "blocked" else ("medium" if items else "low")
-            detail = {"decision": decision, "risk_level": risk, "facility": facility_check, "data_quality": data_quality, "traceability": traceability()}
+            detail = {"decision": decision, "risk_level": risk, "facility": facility_check, "building_footprint_hits": building_hits, "data_quality": data_quality, "traceability": traceability()}
             db.execute("INSERT INTO mission_checks(mission_id,decision,risk_level,items_json) VALUES(?,?,?,?)", (mission_id, decision, risk, json.dumps({"items": items, **detail}, ensure_ascii=False)))
             db.execute("INSERT INTO audit_logs(action,object_type,object_id,detail_json) VALUES(?,?,?,?)", ("check", "mission", mission_id, json.dumps(detail, ensure_ascii=False)))
-            self._json({"mission_id":mission_id,"decision":decision,"risk_level":risk,"items":items,"facility":facility_check,"data_quality":data_quality,"traceability":traceability()})
+            self._json({"mission_id":mission_id,"decision":decision,"risk_level":risk,"items":items,"facility":facility_check,"building_footprint_hits":building_hits,"data_quality":data_quality,"traceability":traceability()})
 
     def _plan_route(self, mission_id):
         with session() as db:

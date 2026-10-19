@@ -258,7 +258,7 @@ test("local place search can confirm and populate a mission endpoint", async ({ 
   const missionCard = page.locator('[data-mission-card="MS-PLACE-QA-01"]');
   await missionCard.locator("[data-check]").click();
   await expect.poll(() => page.locator("#resultBadge").innerText()).toMatch(/pass|warning/);
-  await expect(page.locator("#resultContent")).toContainText("未接入具备来源、许可与覆盖审计的建筑障碍物数据");
+  await expect(page.locator("#resultContent")).toContainText("已接入 158 个可追溯建筑轮廓");
   await expect(page.locator("#resultContent")).toContainText("合成演示数据，不可用于净空结论");
   await expect(page.locator("#resultContent")).not.toContainText("最小净空");
   await missionCard.locator("[data-plan]").click();

@@ -76,3 +76,12 @@ def segment_intersects_polygon(start: Point, end: Point, geometry: dict) -> bool
     if any(point_in_ring(start, hole) or point_in_ring(end, hole) for hole in rings[1:]):
         return False
     return True
+
+
+def segment_intersects_area(start: Point, end: Point, geometry: dict) -> bool:
+    """Support Polygon and MultiPolygon without treating unsupported geometry as clear."""
+    if geometry.get("type") == "Polygon":
+        return segment_intersects_polygon(start, end, geometry)
+    if geometry.get("type") == "MultiPolygon":
+        return any(segment_intersects_polygon(start, end, {"type": "Polygon", "coordinates": polygon}) for polygon in geometry.get("coordinates") or [])
+    return False
