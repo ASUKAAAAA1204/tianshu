@@ -333,14 +333,14 @@ test("building footprint review can focus traceable intersections on the map", a
   await page.reload();
   await page.locator('[data-mission-card="MS-BUILDING-QA-01"] [data-check]').click();
   const focus = page.locator("[data-focus-buildings]");
-  await expect(focus).toBeVisible();
-  await focus.click();
+  await expect(focus.first()).toBeVisible();
+  await focus.first().click();
   await expect.poll(() => page.evaluate(() => window.lpMap.adapter.state.selectedBuildingIds.length)).toBeGreaterThan(0);
   expect(await page.evaluate(() => window.lpMap.adapter.map.getZoom())).toBeGreaterThanOrEqual(12);
   expect(await page.evaluate((id) => window.lpMap.adapter.map.getSource("lp-reference-buildings")._data.features.find((feature) => String(feature.id) === id)?.properties?.route_intersection, result.featureId)).toBeTruthy();
   await page.screenshot({ path: screenshot("building-footprint-review-1366x768.png"), fullPage: false });
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(page.locator("[data-focus-buildings]")).toBeVisible();
+  await expect(page.locator("[data-focus-buildings]").first()).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
   await page.screenshot({ path: screenshot("building-footprint-review-390x844.png"), fullPage: false });
 });

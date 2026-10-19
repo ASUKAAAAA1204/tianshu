@@ -134,7 +134,23 @@ def route_data_quality():
     }
 
 
-def building_footprint_hits(segments):
+def _geometry_bounds(geometry):
+    points = []
+    def visit(value):
+        if not isinstance(value, list):
+            return
+        if len(value) >= 2 and all(isinstance(item, (int, float)) for item in value[:2]):
+            points.append((float(value[0]), float(value[1])))
+        else:
+            for child in value:
+                visit(child)
+    visit(geometry.get("coordinates") or [])
+    if not points:
+        return None
+    return min(point[0] for point in points), min(point[1] for point in points), max(point[0] for point in points), max(point[1] for point in points)
+
+
+def building_footprint_hits(segments, proximity_m=25):
     try:
         collection = json.loads(REFERENCE_BUILDINGS.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
@@ -142,8 +158,16 @@ def building_footprint_hits(segments):
     hits = []
     for feature in collection.get("features") or []:
         geometry = feature.get("geometry") or {}
-        if any(segment_intersects_area(left, right, geometry) for left, right in segments):
-            hits.append({"feature_id": str(feature.get("id") or ""), "name": (feature.get("properties") or {}).get("name"), "height_m": (feature.get("properties") or {}).get("height"), "source": "Geofabrik / OpenStreetMap · ODbL-1.0"})
+        intersection = any(segment_intersects_area(left, right, geometry) for left, right in segments)
+        bounds = _geometry_bounds(geometry)
+        proximity = False
+        if bounds:
+            margin_lat = proximity_m / 110540
+            margin_lng = proximity_m / (111320 * max(0.2, math.cos(math.radians((bounds[1] + bounds[3]) / 2))))
+            expanded = (bounds[0] - margin_lng, bounds[1] - margin_lat, bounds[2] + margin_lng, bounds[3] + margin_lat)
+            proximity = any(max(min(left[0], right[0]), expanded[0]) <= min(max(left[0], right[0]), expanded[2]) and max(min(left[1], right[1]), expanded[1]) <= min(max(left[1], right[1]), expanded[3]) for left, right in segments)
+        if intersection or proximity:
+            hits.append({"feature_id": str(feature.get("id") or ""), "name": (feature.get("properties") or {}).get("name"), "height_m": (feature.get("properties") or {}).get("height"), "source": "Geofabrik / OpenStreetMap · ODbL-1.0", "relation": "intersection" if intersection else "nearby", "proximity_m": proximity_m if proximity else 0})
     return hits
 
 
@@ -829,8 +853,12 @@ class Handler(BaseHTTPRequestHandler):
                 items.append({"rule_code": "F-002", "level": "hard", "message": "终点没有满足机型兼容和服务半径的可用设施", "action": "调整终点或启用备降设施"})
             data_quality = route_data_quality()
             building_hits = building_footprint_hits(segments) if data_quality["building_footprints_verified"] else []
-            if building_hits:
-                items.append({"rule_code": "B-001", "level": "soft", "message": f"航线二维投影与 {len(building_hits)} 个公开参考建筑轮廓相交；建筑高度均未知，不能判定三维碰撞", "action": "回到地图复核相交位置，并补充建筑高度/飞行高度基准", "feature_ids": [item["feature_id"] for item in building_hits[:20]], "source": "Geofabrik / OpenStreetMap · ODbL-1.0", "data_state": "footprint_intersection_height_unknown"})
+            intersections = [item for item in building_hits if item["relation"] == "intersection"]
+            nearby = [item for item in building_hits if item["relation"] == "nearby"]
+            if intersections:
+                items.append({"rule_code": "B-001", "level": "soft", "message": f"航线二维投影与 {len(intersections)} 个公开参考建筑轮廓相交；建筑高度均未知，不能判定三维碰撞", "action": "回到地图复核相交位置，并补充建筑高度/飞行高度基准", "feature_ids": [item["feature_id"] for item in intersections[:20]], "source": "Geofabrik / OpenStreetMap · ODbL-1.0", "data_state": "footprint_intersection_height_unknown"})
+            if nearby:
+                items.append({"rule_code": "B-002", "level": "soft", "message": f"航线二维包络进入 {len(nearby)} 个建筑轮廓约25米范围；这是近邻候选，不代表碰撞", "action": "人工复核位置、缓冲距离和建筑高度", "feature_ids": [item["feature_id"] for item in nearby[:20]], "source": "Geofabrik / OpenStreetMap · ODbL-1.0", "data_state": "footprint_nearby_height_unknown"})
             if not data_quality["building_obstacles_verified"]:
                 items.append({"rule_code": "D-001", "level": "soft", "message": f"已接入 {data_quality['building_feature_count']} 个可追溯建筑轮廓，但可用高度为 {data_quality['building_height_present_count']} 个，不能进行三维碰撞判定", "action": "人工核验并补充可审计的建筑高度数据"})
             if not data_quality["terrain_verified"]:

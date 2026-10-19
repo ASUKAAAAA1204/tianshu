@@ -177,6 +177,7 @@ class ValidationTests(unittest.TestCase):
         self.assertGreaterEqual(len(hits), 1)
         self.assertIsNone(hits[0]["height_m"])
         self.assertIn("OpenStreetMap", hits[0]["source"])
+        self.assertIn(hits[0]["relation"], {"intersection", "nearby"})
 
     def test_route_data_quality_requires_provenance_manifest_and_never_grants_clearance(self):
         with tempfile.TemporaryDirectory() as directory:
