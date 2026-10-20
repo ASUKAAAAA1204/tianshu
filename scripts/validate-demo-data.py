@@ -5,6 +5,7 @@ import argparse
 import hashlib
 import json
 import math
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterable
@@ -134,6 +135,62 @@ def validate_feature_collection(relative_path: str, value: Any, *, expected_sour
     return len(features), coordinates
 
 
+def validate_building_manifest(root: Path = ROOT) -> dict[str, Any]:
+    reference_dir = (root / "data" / "reference").resolve()
+    manifest_path = reference_dir / "buildings.manifest.json"
+    require(manifest_path.is_file(), "building manifest missing")
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ValueError("building manifest is invalid UTF-8 JSON") from error
+    require(manifest.get("verified") is True, "building manifest must be marked verified")
+    for field in ("source_url", "license", "acquired_at", "coordinate_reference", "data_file", "sha256"):
+        require(isinstance(manifest.get(field), str) and bool(manifest[field].strip()), f"building manifest missing {field}")
+    require(manifest["coordinate_reference"] == "EPSG:4326", "building manifest coordinate_reference must be EPSG:4326")
+    require(bool(re.fullmatch(r"[0-9a-fA-F]{64}", manifest["sha256"])), "building manifest sha256 must be a 64-character hex digest")
+    parse_time(manifest["acquired_at"], "building manifest acquired_at")
+    bbox = manifest.get("coverage_bbox")
+    require(isinstance(bbox, list) and len(bbox) == 4, "building manifest coverage_bbox must contain four coordinates")
+    west, south, east, north = (number(item, "building manifest coverage_bbox") for item in bbox)
+    require(-180 <= west < east <= 180 and -90 <= south < north <= 90, "building manifest coverage_bbox is invalid")
+
+    data_path = Path(manifest["data_file"])
+    require(not data_path.is_absolute(), "building manifest data_file must be relative")
+    resolved_data_path = (reference_dir / data_path).resolve()
+    try:
+        relative_data_path = resolved_data_path.relative_to(reference_dir)
+    except ValueError as error:
+        raise ValueError("building manifest data_file escapes reference directory") from error
+    require(resolved_data_path.is_file(), "building reference data file missing")
+    actual_digest = hashlib.sha256(resolved_data_path.read_bytes()).hexdigest()
+    require(actual_digest.lower() == manifest["sha256"].lower(), "building reference SHA-256 mismatch")
+    try:
+        collection = json.loads(resolved_data_path.read_text(encoding="utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ValueError("building reference is invalid UTF-8 JSON") from error
+    feature_count, coordinate_count = validate_feature_collection(relative_data_path.as_posix(), collection)
+    metadata = collection.get("metadata") or {}
+    require(metadata.get("source_url") == manifest["source_url"], "building reference source_url mismatch")
+    require(metadata.get("license") == manifest["license"], "building reference license mismatch")
+    require(metadata.get("acquired_at") == manifest["acquired_at"], "building reference acquired_at mismatch")
+    require(metadata.get("coordinate_reference") == manifest["coordinate_reference"], "building reference coordinate_reference mismatch")
+    require(metadata.get("bbox") == bbox, "building reference bbox mismatch")
+    require(feature_count == manifest.get("feature_count"), "building manifest feature_count mismatch")
+    for index, feature in enumerate(collection["features"]):
+        label = f"building reference feature[{index}]"
+        properties = feature["properties"]
+        require(properties.get("source") == "Geofabrik / OpenStreetMap", f"{label}: source attribution mismatch")
+        require(properties.get("source_license") == manifest["license"], f"{label}: source license mismatch")
+        require(properties.get("source_timestamp") == manifest["acquired_at"], f"{label}: source timestamp mismatch")
+        for longitude, latitude in coordinate_pairs(feature["geometry"]["coordinates"], label):
+            require(west <= longitude <= east and south <= latitude <= north, f"{label}: coordinate outside manifest coverage_bbox")
+    height_present = sum(any(feature["properties"].get(key) not in (None, "") for key in ("height", "building:height")) for feature in collection["features"])
+    height_missing = feature_count - height_present
+    require(height_present == manifest.get("height_present_count"), "building manifest height_present_count mismatch")
+    require(height_missing == manifest.get("height_missing_count"), "building manifest height_missing_count mismatch")
+    return {"features": feature_count, "coordinates": coordinate_count, "bytes": resolved_data_path.stat().st_size, "height_present": height_present, "height_missing": height_missing}
+
+
 def validate_demo_data() -> dict[str, Any]:
     assets = load_json("data/demo/spatial_assets.json")
     metadata = assets.get("metadata") or {}
@@ -163,6 +220,7 @@ def validate_demo_data() -> dict[str, Any]:
     osm_count, osm_coordinates = validate_feature_collection("frontend/data/liangping-osm-reference.geojson", osm, expected_source="openstreetmap_reference")
     require(osm_count == osm_metadata.get("feature_count"), "OSM reference: metadata feature_count mismatch")
     require(all(feature.get("properties", {}).get("asset_type") in {"road", "water", "landuse"} for feature in osm["features"]), "OSM reference: unexpected feature class")
+    building_reference = validate_building_manifest()
 
     grid = load_json("data/demo/liangping_dem_grid.json")
     grid_metadata = grid.get("metadata") or {}
@@ -252,6 +310,11 @@ def validate_demo_data() -> dict[str, Any]:
         "dem_elevation_samples": len(elevation_values),
         "osm_reference_features": osm_count,
         "osm_reference_coordinates": osm_coordinates,
+        "building_reference_features": building_reference["features"],
+        "building_reference_coordinates": building_reference["coordinates"],
+        "building_reference_bytes": building_reference["bytes"],
+        "building_height_present": building_reference["height_present"],
+        "building_height_missing": building_reference["height_missing"],
         "other_demo_records": other_features,
         "other_demo_coordinates": other_coordinates,
         "topology_validation": "not performed (Shapely unavailable)",

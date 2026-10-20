@@ -114,12 +114,13 @@ test("candidate route review is audited and revoked routes cannot start flight",
   await page.locator(`[data-detail="${mission.id}"]`).click();
   await page.locator(`[data-route-reason="${finalRoute.id}"]`).fill("最终复核通过");
   await page.locator(`[data-route-decision="adopt"][data-route-id="${finalRoute.id}"]`).click();
+  await expect(page.locator("#resultContent")).toContainText("当前已采用");
   const started = await page.evaluate(async (missionId) => {
     const token = localStorage.getItem("lp_token");
     const response = await fetch(`/api/missions/${missionId}/flight/start`, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: "{}" });
     return { status: response.status, body: await response.json() };
   }, mission.id);
-  expect(started.status).toBe(201);
+  expect(started.status, JSON.stringify(started.body)).toBe(201);
 
   const restrictionChecks = await page.evaluate(async () => {
     const token = localStorage.getItem("lp_token");
