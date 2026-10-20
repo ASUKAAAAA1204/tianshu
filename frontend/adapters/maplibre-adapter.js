@@ -261,7 +261,13 @@
       if (!this.map.getLayer("lp-reference-buildings-fill")) {
         this.map.addLayer({ id: "lp-reference-buildings-fill", type: "fill", source: "lp-reference-buildings", minzoom: 12, paint: { "fill-color": ["case", ["boolean", ["get", "route_intersection"], false], "#efb75c", "#8094a3"], "fill-opacity": ["case", ["boolean", ["get", "route_intersection"], false], 0.48, 0.16] } });
         this.map.addLayer({ id: "lp-reference-buildings-outline", type: "line", source: "lp-reference-buildings", minzoom: 12, paint: { "line-color": ["case", ["boolean", ["get", "route_intersection"], false], "#ffe2a3", "#9eb1bd"], "line-opacity": 0.78, "line-width": ["case", ["boolean", ["get", "route_intersection"], false], 2, ["interpolate", ["linear"], ["zoom"], 12, 0.35, 16, 1.1]] } });
-        this.map.on("click", "lp-reference-buildings-fill", (event) => { const feature = event.features?.[0]; if (feature) this.context?.onBuildingClick?.({ ...feature, properties: { ...feature.properties, source_kind: "geofabrik_osm_reference" } }); });
+        this.map.on("click", "lp-reference-buildings-fill", (event) => {
+          const feature = event.features?.[0];
+          if (!feature) return;
+          const tileLayers = (this.map.getStyle()?.layers || []).filter((layer) => layer["source-layer"] === "building" || layer.id === "building" || layer.id === "building-3d").map((layer) => layer.id);
+          const tileFeature = tileLayers.length ? this.map.queryRenderedFeatures(event.point, { layers: tileLayers }).find((item) => item.geometry?.type === "Polygon" || item.geometry?.type === "MultiPolygon") : null;
+          this.context?.onBuildingClick?.({ ...feature, properties: { ...feature.properties, source_kind: "geofabrik_osm_reference", tile_reference: tileFeature?.properties || null } });
+        });
       }
       if (!this.map.getLayer("lp-facilities")) {
         this.map.addLayer({ id: "lp-facilities", type: "circle", source: "lp-facilities", filter: ["!", ["has", "point_count"]], paint: { "circle-radius": ["case", ["boolean", ["get", "selected"], false], 5, ["match", ["get", "asset_type"], "route_reference_point", 2.6, 3.2]], "circle-color": ["case", ["boolean", ["get", "selected"], false], "#fff0a5", ["match", ["get", "asset_type"], "route_reference_point", "#87b5cb", "#cfa459"]], "circle-stroke-color": ["match", ["get", "asset_type"], "route_reference_point", "#c7e1eb", "#f0d49a"], "circle-stroke-width": ["case", ["boolean", ["get", "selected"], false], 1.5, 0.8] } });
@@ -424,7 +430,8 @@
       this.state.selectedBuildingIds = features.map((feature) => String(feature.id));
       this.userMoved = true;
       this.syncSources(true);
-      this.map.fitBounds(boundsForFeatures(features), { padding: 80, maxZoom: 16, duration: 450 });
+      const camera = this.map.cameraForBounds(boundsForFeatures(features), { padding: 80, maxZoom: 16 });
+      if (camera) this.map.easeTo({ ...camera, zoom: Math.max(12, camera.zoom), duration: 450 });
       return true;
     }
     reset(context) { this.context = context; this.userMoved = false; this.didFitMission = false; this.map?.setPitch(0); this.render(context); }

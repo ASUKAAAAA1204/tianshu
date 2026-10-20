@@ -118,7 +118,7 @@ test("map controls update visible state", async ({ page }) => {
   await expect(page.locator("#mapTimelineTrack")).toContainText("任务窗口");
   await expect(page.locator("#mapTimelineTrack")).toContainText("临时管制");
   await expect(page.locator("#dataRegister")).toContainText("DEM / 高程");
-  await expect(page.locator("#dataRegister")).toContainText("建筑数据 · 未接入");
+  await expect(page.locator("#dataRegister")).toContainText("建筑轮廓 · 158 个公开参考 · 高度 0/158");
   await expect(page.locator("#terrainStatus")).toContainText("合成网格");
   await expect(page.locator("#altitudeLayerReadout")).toContainText("全部高度");
   await expect.poll(() => page.locator("#maplibreRouteOverlay polyline").count()).toBeGreaterThanOrEqual(2);
@@ -146,6 +146,8 @@ test("map controls update visible state", async ({ page }) => {
   await expect(page.locator("#resultBadge")).toContainText("飞行器");
   await taskButtons.first().click();
   await expect(taskButtons.first()).toHaveAttribute("aria-pressed", "true");
+  await page.evaluate(() => { const adapter = window.lpMap.adapter; adapter.setZoom(13, adapter.context); });
+  await expect(page.locator("#mapObjectSummary button").filter({ hasText: "低空运行服务中心" })).toBeVisible();
   await page.locator("#mapObjectSummary button").filter({ hasText: "低空运行服务中心" }).click();
   await expect(page.locator("#resultBadge")).toContainText("空间对象");
   await expect(page.locator("#resultContent")).toHaveAttribute("data-selected-object-type", "spatial");
@@ -336,7 +338,7 @@ test("building footprint review can focus traceable intersections on the map", a
   await expect(focus.first()).toBeVisible();
   await focus.first().click();
   await expect.poll(() => page.evaluate(() => window.lpMap.adapter.state.selectedBuildingIds.length)).toBeGreaterThan(0);
-  expect(await page.evaluate(() => window.lpMap.adapter.map.getZoom())).toBeGreaterThanOrEqual(12);
+  await expect.poll(() => page.evaluate(() => window.lpMap.adapter.map.getZoom())).toBeGreaterThanOrEqual(12);
   expect(await page.evaluate((id) => window.lpMap.adapter.map.getSource("lp-reference-buildings")._data.features.find((feature) => String(feature.id) === id)?.properties?.route_intersection, result.featureId)).toBeTruthy();
   await page.screenshot({ path: screenshot("building-footprint-review-1366x768.png"), fullPage: false });
   await page.setViewportSize({ width: 390, height: 844 });
@@ -378,8 +380,6 @@ test("live OpenFreeMap style renders real Liangping vector tiles", async ({ page
   await expect.poll(() => page.evaluate(() => window.lpMap.adapter.map.areTilesLoaded()), { timeout: 20_000 }).toBeTruthy();
   const renderedFeatureCount = await page.evaluate(() => window.lpMap.adapter.map.queryRenderedFeatures().length);
   expect(renderedFeatureCount).toBeGreaterThan(20);
-  const buildingLayerIds = await page.evaluate(() => window.lpMap.adapter.map.getStyle().layers.filter((layer) => layer["source-layer"] === "building" || layer.id === "building" || layer.id === "building-3d").map((layer) => layer.id));
-  expect(buildingLayerIds).toContain("building");
   const buildingHit = await page.evaluate(async () => {
     const map = window.lpMap.adapter.map;
     const layers = map.getStyle().layers.filter((layer) => layer["source-layer"] === "building" || layer.id === "building" || layer.id === "building-3d").map((layer) => layer.id);
@@ -396,9 +396,22 @@ test("live OpenFreeMap style renders real Liangping vector tiles", async ({ page
     return null;
   });
   expect(buildingHit).not.toBeNull();
+  const buildingAttributeCoverage = await page.evaluate(() => {
+    const map = window.lpMap.adapter.map;
+    const layers = map.getStyle().layers.filter((layer) => layer["source-layer"] === "building" || layer.id === "building" || layer.id === "building-3d").map((layer) => layer.id);
+    const features = map.queryRenderedFeatures({ layers });
+    const unique = [...new Map(features.map((feature, index) => [String(feature.id ?? `${index}:${JSON.stringify(feature.properties)}`), feature])).values()];
+    const has = (feature, names) => names.some((name) => feature.properties?.[name] != null && feature.properties[name] !== "");
+    return { renderedFeatures: unique.length, rawHeight: unique.filter((feature) => has(feature, ["height", "building:height"])).length, floorCount: unique.filter((feature) => has(feature, ["building:levels"])).length, renderHeight: unique.filter((feature) => has(feature, ["render_height"])).length };
+  });
+  console.log("visible OpenFreeMap building attribute coverage:", JSON.stringify(buildingAttributeCoverage));
+  const buildingLayerIds = await page.evaluate(() => window.lpMap.adapter.map.getStyle().layers.filter((layer) => layer["source-layer"] === "building" || layer.id === "building" || layer.id === "building-3d").map((layer) => layer.id));
+  expect(buildingLayerIds).toContain("building");
   await page.mouse.click(buildingHit.screenX, buildingHit.screenY);
   await expect(page.locator("#resultBadge")).toContainText("建筑轮廓");
-  await expect(page.locator("#resultContent")).toContainText("OpenMapTiles / OpenStreetMap");
+  await expect(page.locator("#resultContent")).toContainText("OpenFreeMap / OpenMapTiles schema / OpenStreetMap contributors");
+  await expect(page.locator("#resultContent")).toContainText("在线瓦片建筑高度");
+  await expect(page.locator("#resultContent")).toContainText("样式渲染值，可能为估算");
   await expect(page.locator("#resultContent")).toContainText("不代表完整建筑障碍库");
   const styleName = new URL(process.env.LP_MAP_STYLE_URL).pathname.split("/").at(-1).replace(/[^a-z0-9-]/gi, "");
   await page.screenshot({ path: screenshot(`maplibre-openfreemap-${styleName}-live-1366x768.png`), fullPage: false });

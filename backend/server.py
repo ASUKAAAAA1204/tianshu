@@ -217,25 +217,31 @@ class Handler(BaseHTTPRequestHandler):
 
     def _json(self, payload, status=HTTPStatus.OK, extra_headers=None):
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self._security_headers()
-        for key, value in (extra_headers or {}).items():
-            self.send_header(key, str(value))
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._security_headers()
+            for key, value in (extra_headers or {}).items():
+                self.send_header(key, str(value))
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            return
 
     def _text(self, body: str, content_type: str, status=HTTPStatus.OK, extra_headers=None):
         encoded = body.encode("utf-8")
-        self.send_response(status)
-        self.send_header("Content-Type", content_type)
-        self._security_headers()
-        for key, value in (extra_headers or {}).items():
-            self.send_header(key, str(value))
-        self.send_header("Content-Length", str(len(encoded)))
-        self.end_headers()
-        self.wfile.write(encoded)
+        try:
+            self.send_response(status)
+            self.send_header("Content-Type", content_type)
+            self._security_headers()
+            for key, value in (extra_headers or {}).items():
+                self.send_header(key, str(value))
+            self.send_header("Content-Length", str(len(encoded)))
+            self.end_headers()
+            self.wfile.write(encoded)
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            return
 
     def _error(self, error: ApiError):
         headers = {}
@@ -333,6 +339,7 @@ class Handler(BaseHTTPRequestHandler):
             except (TypeError, json.JSONDecodeError):
                 event["payload"] = {}
         result["replans"] = rows(db, "SELECT * FROM route_replans WHERE mission_id=? ORDER BY id", (mission_id,))
+        result["route_decisions"] = rows(db, "SELECT * FROM route_decisions WHERE mission_id=? ORDER BY id DESC", (mission_id,))
         flight = db.execute("SELECT * FROM flight_sessions WHERE mission_id=? ORDER BY id DESC LIMIT 1", (mission_id,)).fetchone()
         if flight:
             result["flight"] = dict(flight)
@@ -524,6 +531,7 @@ class Handler(BaseHTTPRequestHandler):
                     result["checks"] = rows(db, "SELECT * FROM mission_checks WHERE mission_id=? ORDER BY id DESC", (result["id"],))
                     result["routes"] = rows(db, "SELECT * FROM routes WHERE mission_id=? ORDER BY id DESC", (result["id"],))
                     result["replans"] = rows(db, "SELECT * FROM route_replans WHERE mission_id=? ORDER BY id DESC", (result["id"],))
+                    result["route_decisions"] = rows(db, "SELECT * FROM route_decisions WHERE mission_id=? ORDER BY id DESC", (result["id"],))
                     self._json(result)
                     return
                 timeline_match = re.fullmatch(r"/api/missions/([^/]+)/timeline", route)
@@ -904,15 +912,31 @@ class Handler(BaseHTTPRequestHandler):
     def _decide_route(self, mission_id, route_id, action, payload, actor_username):
         decision = {"adopt": "adopted", "return": "returned", "revoke": "revoked"}[action]
         with session() as db:
+            mission = db.execute("SELECT status,selected_route_id FROM missions WHERE id=?", (mission_id,)).fetchone()
+            if not mission:
+                raise ApiError(404, "MISSION_NOT_FOUND", "任务不存在")
+            if mission["status"] in {"running", "completed"}:
+                raise ApiError(409, "MISSION_NOT_REVIEWABLE", "任务已进入运行或完成状态，不能变更航线决策")
             route = db.execute("SELECT id FROM routes WHERE id=? AND mission_id=?", (route_id, mission_id)).fetchone()
             if not route:
                 raise ApiError(404, "ROUTE_NOT_FOUND", "任务航线不存在")
             reason = str(payload.get("reason", "")).strip()[:500] or None
+            if not reason:
+                raise ApiError(422, "DECISION_REASON_REQUIRED", "请填写本次航线决策理由")
+            previous = db.execute("SELECT decision FROM route_decisions WHERE route_id=? ORDER BY id DESC LIMIT 1", (route_id,)).fetchone()
+            if action in {"adopt", "return"} and previous:
+                raise ApiError(409, "ROUTE_ALREADY_REVIEWED", "该候选航线已有决策记录；请重新生成候选后再操作")
+            if action == "revoke" and (not previous or previous["decision"] != "adopted" or mission["selected_route_id"] != route_id):
+                raise ApiError(409, "ROUTE_NOT_CURRENTLY_ADOPTED", "仅可撤销当前已采用的航线")
             db.execute("INSERT INTO route_decisions(mission_id,route_id,decision,reason,actor_username) VALUES(?,?,?,?,?)", (mission_id, route_id, decision, reason, actor_username))
             if decision == "adopted":
-                db.execute("UPDATE missions SET route_name=(SELECT name FROM routes WHERE id=?), status='planned', status_label='已计划' WHERE id=?", (route_id, mission_id))
+                db.execute("UPDATE missions SET selected_route_id=?, route_name=(SELECT name FROM routes WHERE id=?), status='planned', status_label='已计划' WHERE id=?", (route_id, route_id, mission_id))
+            elif decision == "revoked":
+                db.execute("UPDATE missions SET selected_route_id=NULL, route_name='待重新确认', status='planned', status_label='待重新确认' WHERE id=?", (mission_id,))
             db.execute("INSERT INTO audit_logs(action,object_type,object_id,detail_json,actor_username) VALUES(?,?,?,?,?)", ("route_" + decision, "route", str(route_id), json.dumps({"mission_id": mission_id, "reason": reason}, ensure_ascii=False), actor_username))
-            self._json({"mission_id": mission_id, "route_id": route_id, "decision": decision, "reason": reason, "actor_username": actor_username}, HTTPStatus.CREATED)
+            created_at = db.execute("SELECT created_at FROM route_decisions WHERE route_id=? ORDER BY id DESC LIMIT 1", (route_id,)).fetchone()["created_at"]
+            result = {"mission_id": mission_id, "route_id": route_id, "decision": decision, "reason": reason, "actor_username": actor_username, "created_at": created_at}
+        self._json(result, HTTPStatus.CREATED)
 
     def _start_flight(self, mission_id):
         with session() as db:
@@ -920,8 +944,12 @@ class Handler(BaseHTTPRequestHandler):
             if not mission: raise ApiError(404, "MISSION_NOT_FOUND", "任务不存在")
             active = db.execute("SELECT 1 FROM flight_sessions WHERE mission_id=? AND status='running'", (mission_id,)).fetchone()
             if active: raise ApiError(409, "FLIGHT_ALREADY_RUNNING", "该任务已经在模拟飞行中")
-            route = db.execute("SELECT * FROM routes WHERE mission_id=? ORDER BY id DESC LIMIT 1", (mission_id,)).fetchone()
-            if not route: raise ApiError(409, "ROUTE_REQUIRED", "请先生成航线")
+            if mission["selected_route_id"] is None:
+                raise ApiError(409, "ROUTE_NOT_ADOPTED", "请先由有权限的调度人员采用一条候选航线")
+            route = db.execute("SELECT * FROM routes WHERE id=? AND mission_id=?", (mission["selected_route_id"], mission_id)).fetchone()
+            decision = db.execute("SELECT decision FROM route_decisions WHERE route_id=? ORDER BY id DESC LIMIT 1", (mission["selected_route_id"],)).fetchone()
+            if not route or not decision or decision["decision"] != "adopted":
+                raise ApiError(409, "ROUTE_NOT_ADOPTED", "当前航线没有有效的人工采用记录")
             telemetry = normalize_telemetry({"longitude": mission["start_lng"], "latitude": mission["start_lat"], "altitude": mission["planned_altitude"], "battery": 100, "link_quality": 100, "status": "airborne", "source": "simulator"})
             session_id = insert_returning_id(db, "INSERT INTO flight_sessions(mission_id,status,progress,telemetry_json,started_at) VALUES(?,?,?,?,CURRENT_TIMESTAMP)", (mission_id, "running", 0, json.dumps(telemetry)))
             self._record_telemetry_sample(db, mission_id, session_id, telemetry)

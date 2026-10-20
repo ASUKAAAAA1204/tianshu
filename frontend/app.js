@@ -7,6 +7,7 @@ let currentRole = "admin";
 let missionViaPoints = [];
 const trackReplay = { missionId: null, samples: [], index: 0, playing: false, timer: null, message: "请选择任务" };
 const apiFetch = (url, options = {}) => { options.headers = { ...(options.headers || {}), ...(localStorage.getItem("lp_token") ? { Authorization: `Bearer ${localStorage.getItem("lp_token")}` } : {}) }; return fetch(url, options); };
+const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
 
 const project = ([lng, lat]) => [((lng - 107.40) / 0.70) * 100, ((30.90 - lat) / 0.40) * 100];
 const metric = (label, value, unit, tone = "") => `<div class="metric"><div class="metric-label">${label}</div><div class="metric-value ${tone}">${value}<small>${unit}</small></div></div>`;
@@ -32,6 +33,7 @@ function displayMapObject(type, value) {
   selectedMapObject = type === "vehicle" ? { type, id: value.id } : { type, feature: value };
   const properties = type === "vehicle" ? value : value.properties || {};
   const isBuilding = type === "building";
+  const tileProperties = isBuilding && properties.tile_reference && typeof properties.tile_reference === "object" ? properties.tile_reference : null;
   const title = type === "vehicle" ? (value.name || value.id) : (properties.name || properties.point_id || (isBuilding ? `建筑轮廓 · ${value.id || "未命名"}` : "空间对象"));
   const isRisk = type === "spatial" && ["obstacle", "hazard", "restricted"].includes(properties.asset_type);
   const detailRows = type === "vehicle" ? [
@@ -45,6 +47,12 @@ function displayMapObject(type, value) {
     ["地图挤出高度", properties.render_height != null ? `${properties.render_height} m · 样式渲染值，可能为估算` : "当前要素未提供"],
     ["楼层数", properties["building:levels"] != null ? `${properties["building:levels"]} 层 · 瓦片属性` : "未提供"],
     ["数据来源", properties.source_kind === "geofabrik_osm_reference" ? "Geofabrik / © OpenStreetMap contributors · ODbL 1.0" : "OpenMapTiles / OpenStreetMap contributors"],
+    ...(tileProperties ? [
+      ["在线瓦片建筑高度", tileProperties.height != null ? `${tileProperties.height} m · 原始瓦片属性` : tileProperties["building:height"] != null ? `${tileProperties["building:height"]} m · 原始瓦片属性` : "未提供"],
+      ["在线瓦片楼层数", tileProperties["building:levels"] != null ? `${tileProperties["building:levels"]} 层 · 瓦片属性` : "未提供"],
+      ["在线挤出渲染高度", tileProperties.render_height != null ? `${tileProperties.render_height} m · 样式渲染值，可能为估算` : "未提供"],
+      ["在线属性来源", "OpenFreeMap / OpenMapTiles schema / OpenStreetMap contributors"],
+    ] : []),
     ["判定边界", "底图参考对象；不代表完整建筑障碍库或实测高度，不参与安全放行"],
   ] : [
     ["对象类型", properties.asset_type || "未分类"], ["风险级别", properties.risk_level || (isRisk ? "未提供" : "未标注")],
@@ -221,9 +229,9 @@ function render(data) {
   const displayFacilities = facilities.filter((item) => !/(?:e2e|api\s*smoke|b3b4|测试)/i.test(`${item.facility_id || ""} ${item.name || ""}`));
   $("#facilityList").innerHTML = displayFacilities.map((item) => `<div class="facility-row"><div><strong>${item.name || item.facility_id}</strong><span>${item.facility_type || "设施"} · ${item.status || "unknown"}</span></div><small>${item.service_radius_m ? `${item.service_radius_m}m` : "半径未知"} · ${item.opening_hours || "时间未知"}</small></div>`).join("") || `<div class="result-empty">暂无设施数据</div>`;
   renderFacilityAdmin(facilities);
-  const writeControls = ["admin", "dispatcher"].includes(currentRole) ? `<button data-check="${"${x.id}"}">检查</button><button data-plan="${"${x.id}"}">航线</button><button data-flight="${"${x.id}"}">启动飞行</button><button class="event" data-event="${"${x.id}"}">注入告警</button>` : "";
+  const writeControls = ["admin", "dispatcher"].includes(currentRole) ? `<button data-check="${"${x.id}"}">检查</button><button data-plan="${"${x.id}"}">航线</button><button data-flight="${"${x.id}"}" __FLIGHT_DISABLED__>启动飞行</button><button class="event" data-event="${"${x.id}"}">注入告警</button>` : "";
   const orderedMissions = [...displayMissions].sort((a, b) => Number(b.id === selectedMissionId) - Number(a.id === selectedMissionId));
-  $("#missionList").innerHTML = orderedMissions.map((x) => `<article class="mission-item ${x.id === selectedMissionId ? "is-selected" : ""}" data-mission-card="${x.id}"><button class="mission-select" type="button" data-select-mission="${x.id}" aria-pressed="${x.id === selectedMissionId}"><span class="mission-icon">${x.status === "running" ? "▶" : "○"}</span><span class="mission-main"><span class="mission-title">${x.name}</span><span class="mission-meta">${x.vehicle_id} · ${x.route_name} · ${x.planned_altitude}m</span></span><span class="state state-${x.status}">${x.status_label}</span></button><div class="mission-actions"><button data-detail="${x.id}">详情</button>${writeControls.replaceAll("${x.id}", x.id)}</div></article>`).join("") || `<div class="result-empty">暂无运行任务</div>`;
+  $("#missionList").innerHTML = orderedMissions.map((x) => `<article class="mission-item ${x.id === selectedMissionId ? "is-selected" : ""}" data-mission-card="${x.id}"><button class="mission-select" type="button" data-select-mission="${x.id}" aria-pressed="${x.id === selectedMissionId}"><span class="mission-icon">${x.status === "running" ? "▶" : "○"}</span><span class="mission-main"><span class="mission-title">${x.name}</span><span class="mission-meta">${x.vehicle_id} · ${x.route_name} · ${x.planned_altitude}m</span></span><span class="state state-${x.status}">${x.status_label}</span></button><div class="mission-actions"><button data-detail="${x.id}">详情</button>${writeControls.replaceAll("${x.id}", x.id).replace("__FLIGHT_DISABLED__", x.selected_route_id ? "" : "disabled title=\"需先人工采用航线\"")}</div></article>`).join("") || `<div class="result-empty">暂无运行任务</div>`;
   $("#ruleList").innerHTML = data.rules.map((x) => `<div class="rule-item"><span class="rule-code">${x.code}</span><span>${x.name}</span><span class="rule-level ${x.level}">${x.level_label}</span></div>`).join("");
   $("#vehicleList").innerHTML = data.vehicles.map((x) => `<div class="vehicle-item"><div><strong>${x.name}</strong><span>${x.model} · ${x.longitude.toFixed(3)}, ${x.latitude.toFixed(3)} · ${x.altitude}m</span></div><div class="vehicle-health"><span class="health-bar"><i class="health-fill" data-battery="${x.battery}"></i></span><span>${x.battery}%</span></div></div>`).join("");
   document.querySelectorAll(".health-fill").forEach((bar) => { bar.style.width = `${bar.dataset.battery}%`; });
@@ -240,9 +248,9 @@ function renderDataRegister(data) {
   const target = $("#dataRegister"); if (!target) return;
   target.replaceChildren();
   const rows = [
-    ["DEM / 高程", "离线合成网格", "WGS84 · DATA-DEMO · 仅规划演示", "demo"],
+    ["DEM / 高程", "公开查询可用 · 本地为合成网格", "Open-Meteo / Copernicus GLO-90 · 垂直基准未知 · 不作净空判断", "demo"],
     ["空域与限制", "公开参考 / 合成", "来源版本未登记为权威许可", "demo"],
-    ["建筑数据", "未接入", "在线底图建筑仅作参考；不参与碰撞与净空判定", "not-ready"],
+    ["建筑轮廓", "158 个公开参考 · 高度 0/158", "Geofabrik / OpenStreetMap · ODbL · 局部数据，不作三维碰撞判定", "not-ready"],
   ];
   rows.forEach(([title, status, note, tone]) => { const row = document.createElement("div"); row.className = `data-register-row ${tone}`; const heading = document.createElement("strong"); heading.textContent = `${title} · ${status}`; const detail = document.createElement("small"); detail.textContent = note; row.append(heading, detail); target.append(row); });
 }
@@ -307,10 +315,22 @@ async function showDetails(id) {
   const check = mission.checks[0];
   const route = mission.routes[0];
   $("#resultBadge").textContent = mission.status_label;
+  selectedRoute = mission.routes.find((item) => Number(item.id) === Number(mission.selected_route_id)) || null;
+  renderMap();
   const terrain = route?.terrain;
   const terrainSummary = terrain?.available ? `${terrain.terrain_risk} · 起点至最高采样点相对起伏 ${terrain.terrain_relief_m}m · ${terrain.sample_count}点 · 合成演示估算` : "暂无DEM参考";
-  const routeHistory = mission.routes?.length ? `<div class="subhead">航线历史</div><div class="route-history">${mission.routes.map((item, index) => `<div class="result-block ${index === 0 ? "pass" : "soft"}"><strong>${item.name}${index === 0 ? " · 当前方案" : " · 历史方案"}</strong><span>${Number(item.distance_m).toFixed(1)} 米 · ${Number(item.duration_s).toFixed(1)} 秒 · 风险 ${item.risk_level}</span><small>${item.terrain?.available ? `DEM合成演示 · 相对地形起伏 ${item.terrain.terrain_relief_m}m · 不代表离地净空` : "暂无DEM参考"} · ${item.created_at || "已记录"}</small></div>`).join("")}</div>` : "";
-  $("#resultContent").innerHTML = `<div class="detail-grid"><span>任务编号</span><strong>${mission.id}</strong><span>飞行器</span><strong>${mission.vehicle_id}</strong><span>起终点</span><strong>${mission.start_lng}, ${mission.start_lat} → ${mission.end_lng}, ${mission.end_lat}</strong><span>计划高度</span><strong>${mission.planned_altitude} 米</strong><span>最近检查</span><strong>${check ? `${check.decision} / ${check.risk_level}` : "尚未检查"}</strong><span>候选航线</span><strong>${route ? `${route.name} / ${route.distance_m.toFixed(1)} 米` : "尚未生成"}</strong><span>地形参考</span><strong>${terrainSummary}</strong></div>${routeHistory}`;
+  const decisions = mission.route_decisions || [];
+  const canReview = ["admin", "dispatcher"].includes(currentRole) && !["running", "completed"].includes(mission.status);
+  const routeHistory = mission.routes?.length ? `<div class="subhead">候选航线与人工复核</div><div class="route-history">${mission.routes.map((item) => {
+    const latestDecision = decisions.find((decision) => Number(decision.route_id) === Number(item.id));
+    const adopted = Number(mission.selected_route_id) === Number(item.id) && latestDecision?.decision === "adopted";
+    const decisionLabel = adopted ? "当前已采用" : ({ adopted: "曾采用 · 已被替换", returned: "已退回修改", revoked: "已撤销" }[latestDecision?.decision] || "待人工复核");
+    const actionMarkup = canReview && (!latestDecision || adopted) ? `<div class="route-review-actions"><label>决策理由<input type="text" maxlength="500" required data-route-reason="${item.id}" placeholder="填写采用、退回或撤销理由"></label><div>${adopted ? `<button type="button" data-route-decision="revoke" data-route-id="${item.id}">撤销采用</button>` : `<button type="button" data-route-decision="adopt" data-route-id="${item.id}">采用航线</button><button type="button" data-route-decision="return" data-route-id="${item.id}">退回修改</button>`}</div></div>` : "";
+    return `<article class="route-review ${adopted ? "is-adopted" : ""}"><div class="route-review-head"><strong>${escapeHtml(item.name)}</strong><span>${decisionLabel}</span></div><span>${Number(item.distance_m).toFixed(1)} 米 · ${Number(item.duration_s).toFixed(1)} 秒 · 风险 ${escapeHtml(item.risk_level)}</span><small>${item.terrain?.available ? `DEM合成演示 · 相对地形起伏 ${item.terrain.terrain_relief_m}m · 不代表离地净空` : "暂无DEM参考"} · ${escapeHtml(item.created_at || "已记录")}</small>${actionMarkup}</article>`;
+  }).join("")}</div>` : "";
+  const decisionHistory = decisions.length ? `<div class="subhead">决策审计记录</div><div class="route-decision-history">${decisions.map((item) => `<div><strong>${({ adopted: "采用", returned: "退回修改", revoked: "撤销" }[item.decision] || escapeHtml(item.decision))} · 航线 #${item.route_id}</strong><span>${escapeHtml(item.reason || "未提供理由")}</span><small>${escapeHtml(item.actor_username || "未知操作者")} · ${escapeHtml(item.created_at || "时间未记录")}</small></div>`).join("")}</div>` : "";
+  $("#resultContent").innerHTML = `<div class="detail-grid"><span>任务编号</span><strong>${escapeHtml(mission.id)}</strong><span>飞行器</span><strong>${escapeHtml(mission.vehicle_id)}</strong><span>起终点</span><strong>${mission.start_lng}, ${mission.start_lat} → ${mission.end_lng}, ${mission.end_lat}</strong><span>计划高度</span><strong>${mission.planned_altitude} 米</strong><span>最近检查</span><strong>${check ? `${escapeHtml(check.decision)} / ${escapeHtml(check.risk_level)}` : "尚未检查"}</strong><span>候选航线</span><strong>${route ? `${escapeHtml(route.name)} / ${Number(route.distance_m).toFixed(1)} 米` : "尚未生成"}</strong><span>地形参考</span><strong>${terrainSummary}</strong><span>飞行状态</span><strong>${mission.selected_route_id ? "当前采用航线已确认" : "未采用航线，禁止启动模拟飞行"}</strong></div>${routeHistory}${decisionHistory}`;
+  bindRouteDecisionButtons(mission.id);
   if (mission.replans?.length) {
     $("#resultContent").innerHTML += mission.replans.map((item) => `<div class="result-block ${item.status === "confirmed" ? "pass" : "soft"}"><strong>重规划 #${item.id}</strong><span>${item.reason}</span><small>${item.status}${item.status === "proposed" ? ` <button data-confirm-replan="${item.id}" data-mission="${mission.id}">人工确认</button>` : ""}</small></div>`).join("");
     bindReplanButtons(mission.id);
@@ -339,7 +359,42 @@ async function runAction(id, action) {
     const terrainLine = terrain?.available ? `<span>DEM合成演示：地形风险参考 ${terrain.terrain_risk} · 相对地形起伏 ${terrain.terrain_relief_m} 米；不代表离地净空</span>` : `<span>DEM地形：暂无参考数据</span>`;
     const candidates = (result.candidates || []).map((item) => `<div class="result-block ${item.feasible ? (item.name === result.name ? "pass" : "soft") : "blocked"}"><strong>${item.name}${item.name === result.name ? " · 已选" : ""}</strong><span>${item.feasible ? `评分 ${item.score} · 距离 ${item.distance_m} 米` : `不可行：${item.hard_conflicts.join("、")}`}</span><small>${item.terrain?.available ? `地形合成参考 ${item.terrain.terrain_risk} · 相对地形起伏 ${item.terrain.terrain_relief_m}m · 非离地净空` : "暂无DEM参考"}${item.soft_conflicts?.length ? ` · 软约束 ${item.soft_conflicts.join("、")}` : ""}</small></div>`).join("");
     $("#resultContent").innerHTML = `<div class="route-result"><strong>${result.name}</strong><span>策略：${result.strategy || "direct"} · 距离 ${result.distance_m} 米 · 预计 ${result.duration_s} 秒</span><span>风险等级：${result.risk_level}</span>${terrainLine}</div><div class="subhead">候选航线评分</div>${candidates}`;
+    const missionResponse = await apiFetch(`/api/missions/${id}`);
+    const mission = await missionResponse.json();
+    const plannedRoute = mission.routes?.find((item) => Number(item.id) === Number(result.id));
+    if (plannedRoute) {
+      const latestDecision = (mission.route_decisions || []).find((item) => Number(item.route_id) === Number(plannedRoute.id));
+      const adopted = Number(mission.selected_route_id) === Number(plannedRoute.id) && latestDecision?.decision === "adopted";
+      const actions = ["admin", "dispatcher"].includes(currentRole) ? `<div class="route-review-actions"><label>决策理由<input type="text" maxlength="500" required data-route-reason="${plannedRoute.id}" placeholder="填写采用或退回理由"></label><div><button type="button" data-route-decision="adopt" data-route-id="${plannedRoute.id}">采用航线</button><button type="button" data-route-decision="return" data-route-id="${plannedRoute.id}">退回修改</button></div></div>` : "";
+      $("#resultContent").insertAdjacentHTML("beforeend", `<article class="route-review ${adopted ? "is-adopted" : ""}"><div class="route-review-head"><strong>${escapeHtml(plannedRoute.name)}</strong><span>${adopted ? "当前已采用" : "待人工复核"}</span></div><span>${Number(plannedRoute.distance_m).toFixed(1)} 米 · ${Number(plannedRoute.duration_s).toFixed(1)} 秒</span>${actions}</article>`);
+      bindRouteDecisionButtons(id);
+    }
   }
+}
+
+function bindRouteDecisionButtons(missionId) {
+  document.querySelectorAll("[data-route-decision]").forEach((button) => {
+    button.onclick = async () => {
+      const reasonInput = document.querySelector(`[data-route-reason="${button.dataset.routeId}"]`);
+      const reason = reasonInput?.value.trim();
+      if (!reason) {
+        reasonInput?.focus();
+        if (reasonInput) reasonInput.setCustomValidity("请填写决策理由");
+        reasonInput?.reportValidity();
+        return;
+      }
+      reasonInput?.setCustomValidity("");
+      button.disabled = true;
+      const response = await apiFetch(`/api/missions/${missionId}/routes/${button.dataset.routeId}/${button.dataset.routeDecision}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason }) });
+      const result = await response.json();
+      if (!response.ok) {
+        button.disabled = false;
+        return showError(result);
+      }
+      await bootstrap();
+      $("#resultBadge").textContent = ({ adopted: "航线已采用", returned: "已退回修改", revoked: "采用已撤销" }[result.decision] || "决策已记录");
+    };
+  });
 }
 
 async function startFlight(id) {
@@ -412,10 +467,19 @@ async function loadTimeline(id) {
   const result = await response.json();
   const timeline = result.timeline || [];
   if (!timeline.length) return;
-  $("#resultContent").innerHTML += `<div class="subhead">运行时间线</div><div class="timeline-list">${timeline.map((item) => `<div class="timeline-row"><strong>${item.action}</strong><span>${item.detail?.message || item.detail?.reason || item.detail?.decision || "状态变更"}</span><small>${item.at}${item.actor ? ` · ${item.actor}` : ""}</small></div>`).join("")}</div>`;
+  $("#resultContent").insertAdjacentHTML("beforeend", `<div class="subhead">运行时间线</div><div class="timeline-list">${timeline.map((item) => `<div class="timeline-row"><strong>${item.action}</strong><span>${item.detail?.message || item.detail?.reason || item.detail?.decision || "状态变更"}</span><small>${item.at}${item.actor ? ` · ${item.actor}` : ""}</small></div>`).join("")}</div>`);
 }
 
 async function bootstrap() {
+  const identityResponse = await apiFetch("/api/auth/me");
+  if (identityResponse.status === 401) throw new Error("401 未登录");
+  if (identityResponse.ok) {
+    const identity = await identityResponse.json();
+    currentRole = identity.role;
+    $("#currentUser").textContent = `${identity.username} · ${identity.role}`;
+    $("#logoutButton").hidden = false;
+    $("#loginGate").style.display = "none";
+  }
   const response = await apiFetch("/api/bootstrap");
   if (response.status === 401) throw new Error("401 未登录");
   if (!response.ok) throw new Error("初始化数据加载失败");
@@ -578,7 +642,25 @@ $("#missionForm").onsubmit = async (event) => {
   $("#health").textContent = `● 任务 ${result.id} 已保存并写入审计日志`;
 };
 
-$("#loginForm").onsubmit = async (event) => { event.preventDefault(); const response = await fetch("/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(Object.fromEntries(new FormData(event.currentTarget))) }); const result = await response.json(); if (!response.ok) { $("#loginMessage").textContent = result.message; return; } localStorage.setItem("lp_token", result.token); currentRole = result.role; $("#currentUser").textContent = `${result.username} · ${result.role}`; $("#logoutButton").hidden = false; $("#loginGate").style.display = "none"; bootstrap(); };
+$("#loginForm").onsubmit = async (event) => {
+  event.preventDefault();
+  const response = await fetch("/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(Object.fromEntries(new FormData(event.currentTarget))) });
+  const result = await response.json();
+  if (!response.ok) { $("#loginMessage").textContent = result.message; return; }
+  localStorage.setItem("lp_token", result.token);
+  currentRole = result.role;
+  $("#currentUser").textContent = `${result.username} · ${result.role}`;
+  $("#logoutButton").hidden = false;
+  $("#loginGate").style.display = "none";
+  try {
+    await bootstrap();
+  } catch (error) {
+    if (error.message.includes("401")) localStorage.removeItem("lp_token");
+    $("#loginGate").style.display = "grid";
+    $("#loginMessage").textContent = error.message;
+    $("#health").textContent = `● 身份初始化失败 · ${error.message}`;
+  }
+};
 $("#logoutButton").onclick = async () => { await apiFetch("/api/auth/logout", { method: "POST" }); localStorage.removeItem("lp_token"); $("#loginGate").style.display = "grid"; $("#logoutButton").hidden = true; };
 if (localStorage.getItem("lp_token")) {
   bootstrap().catch((error) => { if (error.message.includes("401")) { localStorage.removeItem("lp_token"); $("#loginGate").style.display = "grid"; } $("#health").textContent = `● 服务不可用 · ${error.message}`; });
